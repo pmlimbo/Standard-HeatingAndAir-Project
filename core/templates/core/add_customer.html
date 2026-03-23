@@ -1,0 +1,8 @@
+<!-- core/templates/core/add_customer.html -->
+<h1>Add Customer</h1>
+git
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+</form>

@@ -1,0 +1,30 @@
+<!-- core/templates/core/home.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customers</title>
+</head>
+<body>
+    <h1>Customer List</h1>
+
+    <ul>
+        {% for customer in customers %}
+            <li>{{ customer.name }} - {{ customer.email }}</li>
+        {% endfor %}
+    </ul>
+    <a href="/add/">Add Customer</a>
+</body>
+
+<h2>Select Work Code</h2>
+
+<select name="work_code">
+    <option value="">-- Select Work Code --</option>
+    {% for wc in workcodes %}
+        <option value="{{ wc.id }}">
+            {{ wc.code }} - {{ wc.description }}
+        </option>
+    {% endfor %}
+</select>
+
+
+</html>

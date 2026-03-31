@@ -1,0 +1,2 @@
+#python manage.py graph_models core -o erd.png  to get the ERD
+

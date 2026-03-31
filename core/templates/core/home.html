@@ -1,7 +1,18 @@
-<!-- core/templates/core/home.html -->
+{% extends "core/base.html" %}
+
+{% block content %}
+
+
 <!DOCTYPE html>
 <html>
+<form action="/accounts/logout/" method="post">
+    {% csrf_token %}
+    <button type="submit">Logout</button>
+</form>
 <head>
+{% if user.is_superuser or user.is_staff or user.groups.all.0.name == "Authorized" %}
+    <a href="/reports/">Reports</a>
+{% endif %}
     <title>Customers</title>
 </head>
 <body>
@@ -28,3 +39,5 @@
 
 
 </html>
+
+{% endblock %}

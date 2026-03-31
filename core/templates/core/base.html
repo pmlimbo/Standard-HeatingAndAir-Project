@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Site</title>
+</head>
+<body>
+
+{% if user.is_authenticated %}
+    <div style="margin-bottom: 20px;">
+        <a href="/">Home</a> |
+        <a href="/reports/">Reports</a> |
+
+        <form action="/accounts/logout/" method="post" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit">Logout</button>
+        </form>
+    </div>
+{% endif %}
+
+{% block content %}
+{% endblock %}
+
+</body>
+</html>

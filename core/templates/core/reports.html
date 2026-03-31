@@ -1,0 +1,17 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+
+
+
+
+<form action="/accounts/logout/" method="post">
+    {% csrf_token %}
+    <button type="submit">Logout</button>
+</form>
+
+<h1>Reports Page</h1>
+<p>Only authorized users can see this.</p>
+
+
+{% endblock %}

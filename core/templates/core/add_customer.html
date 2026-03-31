@@ -1,4 +1,9 @@
-<!-- core/templates/core/add_customer.html -->
+<form action="/accounts/logout/" method="post">
+    {% csrf_token %}
+    <button type="submit">Logout</button>
+</form>
+
+
 <h1>Add Customer</h1>
 git
 <form method="post">
@@ -6,3 +11,6 @@ git
     {{ form.as_p }}
     <button type="submit">Save</button>
 </form>
+
+<button type="submit">Save</button>
+<a href="/" style="margin-left:10px;">Cancel</a>

@@ -15,3 +15,10 @@ from .models import WorkCode
 class WorkCodeAdmin(admin.ModelAdmin):
     list_display = ('code', 'description')
     search_fields = ('code', 'description')
+
+
+from .models import Job, Employee, TimeEntry
+
+admin.site.register(Job)
+admin.site.register(Employee)
+admin.site.register(TimeEntry)

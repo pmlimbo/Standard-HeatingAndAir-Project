@@ -7,4 +7,8 @@ urlpatterns = [
     path('add/', views.add_customer),
 
     path('reports/', views.reports),
+
+    path('timesheet/', views.timesheet),
+
+    path('export-timesheet/', views.export_timesheet),
 ]

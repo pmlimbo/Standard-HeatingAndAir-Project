@@ -1,0 +1,180 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+
+<h2>Employee Timesheet</h2>
+
+<form method="post">
+    {% csrf_token %}
+
+    <label for="work_date">Date:</label>
+    <input type="date" id="work_date" name="work_date" value="{{ selected_date|default:'' }}" required>
+
+    <hr>
+
+    <div id="jobs-container">
+
+        <div class="job-block">
+            <h3>Job</h3>
+
+            <label for="job_1">Job Number:</label>
+            <select class="job-select" id="job_1" name="job_1" style="width:300px;">
+                <option value="">Select Job</option>
+                {% for job in jobs %}
+                    <option value="{{ job.id }}">
+                        {{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label for="work_code_1">Work Code:</label>
+            <select class="workcode-select" id="work_code_1" name="work_code_1">
+                <option value="">Select Work Code</option>
+                {% for wc in workcodes %}
+                    <option value="{{ wc.id }}">
+                        {{ wc.code }} | {{ wc.description }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <label for="non_job_code_1">OR Non-Job Code:</label>
+            <select id="non_job_code_1" name="non_job_code_1">
+                <option value="">Select Non-Job Code</option>
+                {% for wc in non_job_codes %}
+                    <option value="{{ wc.id }}">{{ wc.code }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="hours_1">Hours Worked:</label>
+            <select id="hours_1" name="hours_1">
+                <option value="">Select Hours</option>
+                {% for i in hour_options %}
+                    <option value="{{ i }}">{{ i }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="drive_time_1">Drive Time:</label>
+            <select id="drive_time_1" name="drive_time_1">
+                <option value="">Select Drive Time</option>
+                {% for i in drive_time_options %}
+                    <option value="{{ i }}">{{ i }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="mileage_1">Miles:</label>
+            <input type="number" step="0.1" id="mileage_1" name="mileage_1" required>
+
+            <label for="comments_1">Comments:</label>
+            <textarea id="comments_1" name="comments_1"></textarea>
+        </div>
+
+    </div>
+
+    <button type="button" onclick="addJob()">+ Add Another Job</button>
+
+    <br><br>
+    <button type="submit">Save and Submit</button>
+
+</form>
+
+<!-- TOTALS -->
+<div id="totals">
+    <h4>Total Hours: <span id="total-hours">0.00</span></h4>
+    <h4>Total Miles: <span id="total-miles">0.00</span></h4>
+</div>
+
+<!-- JS -->
+<script>
+let jobCount = 1;
+
+function addJob() {
+    jobCount++;
+
+    const container = document.getElementById('jobs-container');
+    const original = container.children[0];
+    const block = original.cloneNode(true);
+
+    // Clear values
+    block.querySelectorAll('input, textarea, select').forEach(el => {
+        if (el.tagName === 'SELECT') {
+            el.selectedIndex = 0;
+        } else {
+            el.value = '';
+        }
+    });
+
+    // Update names + ids
+    block.querySelectorAll('[name]').forEach(el => {
+        el.name = el.name.replace(/_\d+/, '_' + jobCount);
+    });
+
+    block.querySelectorAll('[id]').forEach(el => {
+        el.id = el.id.replace(/_\d+/, '_' + jobCount);
+    });
+
+    block.querySelectorAll('label').forEach(label => {
+        if (label.htmlFor) {
+            label.htmlFor = label.htmlFor.replace(/_\d+/, '_' + jobCount);
+        }
+    });
+
+    container.appendChild(block);
+
+    initializeSelect2(block);
+    updateTotals();
+}
+
+// Totals
+function updateTotals() {
+    let totalHours = 0;
+    let totalMiles = 0;
+
+    document.querySelectorAll('[name^="hours_"]').forEach(h => {
+        totalHours += parseFloat(h.value || 0);
+    });
+
+    document.querySelectorAll('[name^="mileage_"]').forEach(m => {
+        totalMiles += parseFloat(m.value || 0);
+    });
+
+    document.getElementById('total-hours').innerText = totalHours.toFixed(2);
+    document.getElementById('total-miles').innerText = totalMiles.toFixed(2);
+}
+
+// Prevent selecting both codes
+document.addEventListener('change', function(e) {
+    if (e.target.name.startsWith('work_code_')) {
+        let index = e.target.name.split('_')[2];
+        let nonJob = document.querySelector(`[name="non_job_code_${index}"]`);
+        if (e.target.value) nonJob.value = "";
+    }
+
+    if (e.target.name.startsWith('non_job_code_')) {
+        let index = e.target.name.split('_')[3];
+        let jobCode = document.querySelector(`[name="work_code_${index}"]`);
+        if (e.target.value) jobCode.value = "";
+    }
+});
+
+// Select2 init
+function initializeSelect2(scope = document) {
+    $(scope).find('.job-select').select2({
+        placeholder: "Search Job Number...",
+        allowClear: true
+    });
+
+    $(scope).find('.workcode-select').select2({
+        placeholder: "Search Work Code...",
+        allowClear: true
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeSelect2();
+    updateTotals();
+});
+
+document.addEventListener('input', updateTotals);
+</script>
+
+{% endblock %}

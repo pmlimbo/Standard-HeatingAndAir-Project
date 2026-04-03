@@ -34,7 +34,7 @@ SESSION_SAVE_EVERY_REQUEST = True
 
 
 LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/timesheet/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # Application definition

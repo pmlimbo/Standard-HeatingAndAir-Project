@@ -1,31 +1,162 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Site</title>
+    <title>Employee Timesheet</title>
 
-    <!-- CSS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- jQuery + Select2 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f5f7fa;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            background: #1e3a5f;
+            color: white;
+            padding: 20px;
+        }
+
+        .header img {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            margin: 5px 0;
+            font-size: 24px;
+        }
+
+        .header a {
+            color: #cfe3ff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        /* NAV */
+        .nav {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .nav a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #1e3a5f;
+            font-weight: bold;
+        }
+
+        /* CARD STYLE */
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        /* FORM */
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 10px;
+            width: 100%;
+            background: #1e3a5f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #2a4f7d;
+        }
+
+        /* FOOTER */
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 30px;
+            padding: 20px;
+        }
+
+        /* MOBILE */
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
 </head>
+
 <body>
 
-{% if user.is_authenticated %}
-    <div style="margin-bottom: 20px;">
-        <a href="/">Home</a> |
-        <a href="/reports/">Reports</a> |
+<!-- HEADER -->
+<div class="header">
+    <!-- 🔧 Replace with your logo path -->
+    {% load static %}
+    <img src="{% static 'logo.png' %}" alt="Logo">
+
+    <h1>Employee Timesheet</h1>
+
+    <a href="https://standardac.com/" target="_blank">
+        Go to Main Website
+    </a>
+</div>
+
+<div class="container">
+
+    {% if user.is_authenticated %}
+    <div class="nav">
+        <a href="/timesheet/">Timesheet</a>
+        <a href="/reports/">Reports</a>
 
         <form action="/accounts/logout/" method="post" style="display:inline;">
             {% csrf_token %}
-            <button type="submit">Logout</button>
+            <button style="width:auto; padding:5px 10px;">Logout</button>
         </form>
     </div>
-{% endif %}
+    {% endif %}
 
-{% block content %}
-{% endblock %}
+    {% block content %}
+    {% endblock %}
 
-<!-- JS (order matters) -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+    <!-- 🔧 You can customize this -->
+    <p>Standard Heating & Air Conditioning</p>
+    <p>Internal Employee System</p>
+</div>
 
 </body>
 </html>

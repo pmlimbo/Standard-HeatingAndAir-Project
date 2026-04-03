@@ -1,17 +1,16 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Login</title>
-</head>
-<body>
+{% extends "core/base.html" %}
 
-<h2>Login</h2>
+{% block content %}
 
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-</form>
+<div class="card" style="max-width:400px; margin:auto; text-align:center;">
+    <h2>Login</h2>
 
-</body>
-</html>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <button type="submit">Login</button>
+    </form>
+</div>
+
+{% endblock %}

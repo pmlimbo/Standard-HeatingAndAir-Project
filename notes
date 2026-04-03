@@ -1,2 +1,19 @@
 #python manage.py graph_models core -o erd.png  to get the ERD
 
+#Password for testing is
+
+#TO IMPORT JOBS  ==========================
+python manage.py shell
+
+from core.import_jobs import run
+run()
+
+
+#TO IMPORT EMPLOYEES  ==========================
+python manage.py shell
+
+from core.import_employees import run
+run()
+
+from django.contrib.auth.models import User
+User.objects.update(is_staff=True)

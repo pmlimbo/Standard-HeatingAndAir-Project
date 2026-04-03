@@ -4,11 +4,38 @@
 
 <h2>Employee Timesheet</h2>
 
+{% if entries %}
+    <div class="card">
+        <h3>Existing Entries</h3>
+
+        {% for entry in entries %}
+            <div style="border-bottom:1px solid #ddd; padding:10px;">
+                <strong>
+                    {% if entry.job %}
+                        {{ entry.job.job_number }}
+                    {% endif %}
+                </strong>
+                {{ entry.work_code.code }} |
+                {{ entry.hours_worked }} hrs |
+                {{ entry.drive_time }} drive |
+                {{ entry.mileage }} miles
+
+                <br>
+
+                <a href="/delete-entry/{{ entry.id }}/">Delete</a>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+
+
 <form method="post">
     {% csrf_token %}
 
     <label for="work_date">Date:</label>
-    <input type="date" id="work_date" name="work_date" value="{{ selected_date|default:'' }}" required>
+    <input type="date" name="date" value="{{ selected_date }}"
+       onchange="window.location='?date=' + this.value">
 
     <hr>
 
@@ -78,9 +105,14 @@
 </form>
 
 <!-- TOTALS -->
-<div id="totals">
-    <h4>Total Hours: <span id="total-hours">0.00</span></h4>
-    <h4>Total Miles: <span id="total-miles">0.00</span></h4>
+<div id="totals" class="card">
+    <h4>Saved Totals</h4>
+    <p>Hours: {{ total_hours }}</p>
+    <p>Miles: {{ total_miles }}</p>
+
+    <h4>Current Entry Totals</h4>
+    <p>Hours: <span id="total-hours">0.00</span></p>
+    <p>Miles: <span id="total-miles">0.00</span></p>
 </div>
 
 <!-- JS -->
@@ -144,13 +176,13 @@ function updateTotals() {
 // Prevent selecting both codes
 document.addEventListener('change', function(e) {
     if (e.target.name.startsWith('work_code_')) {
-        let index = e.target.name.split('_')[2];
+        let index = e.target.name.match(/\d+/)[0];
         let nonJob = document.querySelector(`[name="non_job_code_${index}"]`);
         if (e.target.value) nonJob.value = "";
     }
 
     if (e.target.name.startsWith('non_job_code_')) {
-        let index = e.target.name.split('_')[3];
+        let index = e.target.name.match(/\d+/)[0];
         let jobCode = document.querySelector(`[name="work_code_${index}"]`);
         if (e.target.value) jobCode.value = "";
     }

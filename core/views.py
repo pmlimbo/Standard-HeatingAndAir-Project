@@ -18,18 +18,6 @@ def is_authorized(user):
     )
 
 
-# ================= HOME =================
-@login_required
-def home(request):
-    customers = Customer.objects.all().order_by('-created_at')
-    workcodes = WorkCode.objects.all().order_by('code')
-
-    return render(request, 'core/home.html', {
-        'customers': customers,
-        'workcodes': workcodes
-    })
-
-
 # ================= ADD CUSTOMER =================
 @login_required
 def add_customer(request):
@@ -54,15 +42,8 @@ def reports(request):
 # ================= TIMESHEET =================
 @login_required
 def timesheet(request):
+
     jobs = Job.objects.all().order_by('job_number')
-
-    hour_options = [
-        "0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4", "5", "6", "7", "8"
-    ]
-
-    drive_time_options = [
-        "0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"
-    ]
 
     workcodes = WorkCode.objects.filter(
         is_active=True,
@@ -74,16 +55,23 @@ def timesheet(request):
         requires_job=False
     ).order_by('code')
 
+    hour_options = [
+        "0","0.25","0.5","0.75","1","1.25","1.5","2","3","4","5","6","7","8"
+    ]
+
+    drive_time_options = [
+        "0","0.25","0.5","0.75","1","1.25","1.5","2"
+    ]
+
     selected_date = request.GET.get('date') or date.today().isoformat()
+    selected_date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
+    # SAFER employee fetch
+    employee, _ = Employee.objects.get_or_create(user=request.user)
+
+    # ================= SAVE =================
     if request.method == 'POST':
-        work_date = request.POST.get('work_date')
-
-        # FIX: never allow blank date
-        if not work_date:
-            work_date = date.today().isoformat()
-
-        employee = Employee.objects.get(user=request.user)
+        work_date = request.POST.get('work_date') or date.today().isoformat()
 
         for key in request.POST:
             if key.startswith('job_'):
@@ -98,7 +86,7 @@ def timesheet(request):
                 mileage = request.POST.get(f'mileage_{index}')
                 comments = request.POST.get(f'comments_{index}')
 
-                # Skip completely empty rows
+                # Skip empty rows
                 if not any([job_id, work_code_id, non_job_code_id, hours, drive_time, mileage]):
                     continue
 
@@ -106,7 +94,7 @@ def timesheet(request):
                 if not hours or not drive_time or mileage == "":
                     continue
 
-                # Must choose ONE code
+                # Must choose ONE
                 if work_code_id and non_job_code_id:
                     continue
 
@@ -128,7 +116,16 @@ def timesheet(request):
                     comments=comments,
                 )
 
-        return redirect('/timesheet/')
+        return redirect(f'/timesheet/?date={work_date}')
+
+    # ================= LOAD EXISTING =================
+    entries = TimeEntry.objects.filter(
+        employee=employee,
+        work_date=selected_date_obj
+    ).select_related('job', 'work_code').order_by('id')
+
+    total_hours = sum(e.hours_worked for e in entries)
+    total_miles = sum(e.mileage for e in entries)
 
     return render(request, 'core/timesheet.html', {
         'jobs': jobs,
@@ -136,8 +133,25 @@ def timesheet(request):
         'non_job_codes': non_job_codes,
         'selected_date': selected_date,
         'hour_options': hour_options,
-        'drive_time_options': drive_time_options
+        'drive_time_options': drive_time_options,
+        'entries': entries,
+        'total_hours': total_hours,
+        'total_miles': total_miles
     })
+
+
+# ================= DELETE =================
+@login_required
+def delete_entry(request, entry_id):
+    entry = TimeEntry.objects.get(id=entry_id)
+
+    if entry.employee.user != request.user:
+        return redirect('/timesheet/')
+
+    date_str = entry.work_date.strftime("%Y-%m-%d")
+    entry.delete()
+
+    return redirect(f'/timesheet/?date={date_str}')
 
 
 # ================= EXPORT =================
@@ -145,7 +159,6 @@ def timesheet(request):
 def export_timesheet(request):
     work_date = request.GET.get('date')
 
-    # FIX: prevent crash if blank
     if work_date:
         try:
             work_date = datetime.strptime(work_date, "%Y-%m-%d").date()
@@ -154,7 +167,7 @@ def export_timesheet(request):
     else:
         work_date = date.today()
 
-    employee = Employee.objects.get(user=request.user)
+    employee, _ = Employee.objects.get_or_create(user=request.user)
 
     entries = TimeEntry.objects.filter(
         employee=employee,
@@ -167,36 +180,21 @@ def export_timesheet(request):
     writer = csv.writer(response)
 
     writer.writerow([
-        'EntryDate',
-        'EmployeeCode',
-        'Employee_Name',
-        'WorkDate',
-        'DayOfWeek',
-        'LineNumber',
-        'JobNumber',
-        'Job_Address',
-        'Job_Name',
-        'Work_Code',
-        'Hours_Worked',
-        'Drive_Time',
-        'Mileage',
-        'Comments',
-        'Logfield'
+        'EntryDate','EmployeeCode','Employee_Name','WorkDate','DayOfWeek',
+        'LineNumber','JobNumber','Job_Address','Job_Name','Work_Code',
+        'Hours_Worked','Drive_Time','Mileage','Comments','Logfield'
     ])
 
-    line_number = 1
-
-    for entry in entries:
+    for i, entry in enumerate(entries, start=1):
         formatted_date = entry.work_date.strftime('%d-%b-%y')
-        day_of_week = entry.work_date.strftime('%A')
 
         writer.writerow([
             formatted_date,
             request.user.username,
             f"{request.user.first_name} {request.user.last_name}".upper(),
             formatted_date,
-            day_of_week,
-            line_number,
+            entry.work_date.strftime('%A'),
+            i,
             entry.job.job_number if entry.job else '',
             entry.job.street_address if entry.job else '',
             entry.job.job_name if entry.job else '',
@@ -207,7 +205,5 @@ def export_timesheet(request):
             entry.comments,
             ''
         ])
-
-        line_number += 1
 
     return response

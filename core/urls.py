@@ -11,4 +11,6 @@ urlpatterns = [
     path('timesheet/', views.timesheet),
 
     path('export-timesheet/', views.export_timesheet),
+
+    path('delete-entry/<int:entry_id>/', views.delete_entry),
 ]

@@ -2,6 +2,9 @@
 
 #Password for testing is
 
+
+#MAKE IT SO YOU CANT VIEW SOURCE STUFF
+
 #TO IMPORT JOBS  ==========================
 python manage.py shell
 

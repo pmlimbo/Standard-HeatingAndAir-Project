@@ -2,19 +2,13 @@
 <html>
 <head>
     <title>Employee Timesheet</title>
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- jQuery + Select2 -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial;
             margin: 0;
-            background-color: #f5f7fa;
+            background: #f5f7fa;
         }
 
         .container {
@@ -23,140 +17,117 @@
             padding: 20px;
         }
 
-        /* HEADER */
         .header {
             text-align: center;
-            background: #ffffff;
-            color: #000000;
             padding: 20px;
+            background: #fff;
         }
 
         .header img {
             max-width: 150px;
-            margin-bottom: 10px;
         }
 
-        .header h1 {
-            margin: 5px 0;
-            font-size: 24px;
-        }
-
-        .header a {
-            color: #2c80ff;
-            text-decoration: none;
-            font-size: 14px;
-        }
-
-        /* NAV */
         .nav {
             text-align: center;
-            margin: 15px 0;
+            margin: 10px 0;
         }
 
-        .nav a {
-            margin: 0 10px;
-            text-decoration: none;
-            color: #1e3a5f;
-            font-weight: bold;
-        }
-
-        /* CARD STYLE */
         .card {
-            background: white;
-            padding: 20px;
+            background: #fff;
+            padding: 15px;
             border-radius: 8px;
-            box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-
-        /* FORM */
-        label {
-            display: block;
-            margin-top: 10px;
-            font-weight: bold;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.1);
         }
 
         input, select, textarea {
             width: 100%;
             padding: 8px;
             margin-top: 5px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
         }
 
         button {
-            margin-top: 15px;
-            padding: 10px;
             width: 100%;
+            padding: 10px;
+            margin-top: 10px;
             background: #1e3a5f;
             color: white;
             border: none;
-            border-radius: 5px;
+        }
+
+        /* 🔥 DROPDOWN FIX */
+        .dropdown-wrapper {
+            position: relative;
+        }
+
+        .dropdown-list {
+        position: relative;   /* 🔥 CHANGE THIS */
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+
+        background: white;
+        border: 1px solid #ccc;
+        margin-top: 5px;
+
+        display: none;
+       }
+
+        .dropdown-item {
+            padding: 8px;
             cursor: pointer;
         }
 
-        button:hover {
-            background: #2a4f7d;
+        .dropdown-item:hover {
+            background: #eee;
         }
+    /* FIX DROPDOWN POSITIONING */
+    .dropdown-wrapper {
+        position: relative;
+    }
 
-        /* FOOTER */
-        .footer {
-            text-align: center;
-            font-size: 12px;
-            color: #666;
-            margin-top: 30px;
-            padding: 20px;
-        }
+    /* THIS IS THE KEY FIX */
 
-        /* MOBILE */
-        @media (max-width: 600px) {
-            .container {
-                padding: 10px;
-            }
-        }
-    </style>
-</head>
 
-<body>
+    /* Prevent visual overflow issues */
+    .card {
+        overflow: visible;   /* 🔥 THIS FIXES THE "cut off / hanging" issue */
+    }
+        </style>
+    </head>
 
-<!-- HEADER -->
+    <body>
+    .dropdown-item {
+        border-bottom: 1px solid #eee;
+    }
+
+    .dropdown-item:last-child {
+        border-bottom: none;
+    }
+{% load static %}
+
 <div class="header">
-    <!-- 🔧 Replace with your logo path -->
-    {% load static %}
-
-    <img src="{% static 'core/Standard_AC_color_logo.png' %}" alt="Logo">
-
-    <h1>Employee Timesheet</h1>
-
-    <a href="https://standardac.com/" target="_blank">
-        Go to Main Website
-    </a>
+    <img src="{% static 'core/Standard_AC_color_logo.png' %}">
+    <h2>Employee Timesheet</h2>
+    <a href="https://standardac.com/" target="_blank">Go to Main Website</a>
 </div>
 
 <div class="container">
 
-    {% if user.is_authenticated %}
-    <div class="nav">
-        <a href="/timesheet/">Timesheet</a>
-        <a href="/reports/">Reports</a>
+{% if user.is_authenticated %}
+<div class="nav">
+    <a href="/timesheet/">Timesheet</a>
+    <a href="/reports/">Reports</a>
 
-        <form action="/accounts/logout/" method="post" style="display:inline;">
-            {% csrf_token %}
-            <button style="width:auto; padding:5px 10px;">Logout</button>
-        </form>
-    </div>
-    {% endif %}
-
-    {% block content %}
-    {% endblock %}
-
+    <form action="/accounts/logout/" method="post" style="display:inline;">
+        {% csrf_token %}
+        <button style="width:auto;">Logout</button>
+    </form>
 </div>
+{% endif %}
 
-<!-- FOOTER -->
-<div class="footer">
-    <!-- 🔧 You can customize this -->
-    <p>Standard Heating & Air Conditioning</p>
-    <p>Internal Employee System</p>
+{% block content %}{% endblock %}
+
 </div>
 
 </body>

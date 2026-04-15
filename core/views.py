@@ -55,64 +55,82 @@ def timesheet(request):
         requires_job=False
     ).order_by('code')
 
-    hour_options = [
-        "0","0.25","0.5","0.75","1","1.25","1.5","2","3","4","5","6","7","8"
-    ]
-
-    drive_time_options = [
-        "0","0.25","0.5","0.75","1","1.25","1.5","2"
-    ]
+    hour_options = ["0","0.25","0.5","0.75","1","1.25","1.5","2","3","4","5","6","7","8"]
+    drive_time_options = ["0","0.25","0.5","0.75","1","1.25","1.5","2"]
 
     selected_date = request.GET.get('date') or date.today().isoformat()
     selected_date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
 
-    # SAFER employee fetch
     employee, _ = Employee.objects.get_or_create(user=request.user)
 
     # ================= SAVE =================
     if request.method == 'POST':
-        work_date = request.POST.get('work_date') or date.today().isoformat()
+        work_date = request.POST.get('date') or selected_date
+        work_date_obj = datetime.strptime(work_date, "%Y-%m-%d").date()
 
         for key in request.POST:
             if key.startswith('job_'):
 
                 index = key.split('_')[1]
 
-                job_id = request.POST.get(f'job_{index}')
-                work_code_id = request.POST.get(f'work_code_{index}')
-                non_job_code_id = request.POST.get(f'non_job_code_{index}')
+                job_raw = request.POST.get(f'job_{index}')
+                wc_raw = request.POST.get(f'work_code_{index}')
+                non_job_code_val = request.POST.get(f'non_job_code_{index}')
+
                 hours = request.POST.get(f'hours_{index}')
                 drive_time = request.POST.get(f'drive_time_{index}')
                 mileage = request.POST.get(f'mileage_{index}')
                 comments = request.POST.get(f'comments_{index}')
 
                 # Skip empty rows
-                if not any([job_id, work_code_id, non_job_code_id, hours, drive_time, mileage]):
+                if not any([job_raw, wc_raw, non_job_code_val, hours, drive_time, mileage]):
                     continue
 
-                # Required fields
+                # Required
                 if not hours or not drive_time or mileage == "":
                     continue
 
-                # Must choose ONE
-                if work_code_id and non_job_code_id:
+                # ===== JOB PARSE =====
+                job = None
+                if job_raw:
+                    try:
+                        job_number = job_raw.split('|')[0].strip()
+                        job = Job.objects.filter(job_number=job_number).first()
+                    except:
+                        job = None
+
+                # ===== WORK CODE PARSE =====
+                work_code = None
+
+                if wc_raw:
+                    try:
+                        wc_code = wc_raw.split('-')[0].strip()
+                        work_code = WorkCode.objects.filter(code=wc_code).first()
+                    except:
+                        work_code = None
+
+                if non_job_code_val:
+                    work_code = WorkCode.objects.filter(code=non_job_code_val).first()
+
+                # Validation
+                if wc_raw and non_job_code_val:
                     continue
 
-                if not work_code_id and not non_job_code_id:
+                if not work_code:
                     continue
 
-                # If work code requires job
-                if work_code_id and not job_id:
+                if work_code.requires_job and not job:
                     continue
 
+                # SAVE
                 TimeEntry.objects.create(
                     employee=employee,
-                    job_id=job_id if job_id else None,
-                    work_code_id=work_code_id or non_job_code_id,
-                    work_date=work_date,
-                    hours_worked=hours,
-                    drive_time=drive_time,
-                    mileage=mileage,
+                    job=job,
+                    work_code=work_code,
+                    work_date=work_date_obj,
+                    hours_worked=float(hours),
+                    drive_time=float(drive_time),
+                    mileage=float(mileage),
                     comments=comments,
                 )
 
@@ -124,6 +142,7 @@ def timesheet(request):
         work_date=selected_date_obj
     ).select_related('job', 'work_code').order_by('id')
 
+    # 🔥 RESTORED TOTALS
     total_hours = sum(e.hours_worked for e in entries)
     total_miles = sum(e.mileage for e in entries)
 
@@ -138,7 +157,6 @@ def timesheet(request):
         'total_hours': total_hours,
         'total_miles': total_miles
     })
-
 
 # ================= DELETE =================
 @login_required

@@ -1,15 +1,16 @@
-from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required, user_passes_test
-
-from datetime import date, datetime
 import csv
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm
-from .models import Customer, WorkCode, Job, Employee, TimeEntry
+from .models import Employee, Job, TimeEntry, WorkCode
 
 
-# ================= AUTH =================
 def is_authorized(user):
     return (
         user.is_superuser or
@@ -18,133 +19,118 @@ def is_authorized(user):
     )
 
 
-# ================= ADD CUSTOMER =================
+def parse_work_date(value):
+    if not value:
+        return date.today()
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return date.today()
+
+
 @login_required
 def add_customer(request):
     if request.method == 'POST':
         form = CustomerForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('/')
+            return redirect('timesheet')
     else:
         form = CustomerForm()
 
     return render(request, 'core/add_customer.html', {'form': form})
 
 
-# ================= REPORTS =================
 @login_required
 @user_passes_test(is_authorized, login_url='/')
 def reports(request):
     return render(request, 'core/reports.html')
 
 
-# ================= TIMESHEET =================
 @login_required
 def timesheet(request):
-
     jobs = Job.objects.all().order_by('job_number')
+    workcodes = WorkCode.objects.filter(is_active=True, requires_job=True).order_by('code')
+    non_job_codes = WorkCode.objects.filter(is_active=True, requires_job=False).order_by('code')
+    hour_options = ["0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4", "5", "6", "7", "8"]
+    drive_time_options = ["0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"]
 
-    workcodes = WorkCode.objects.filter(
-        is_active=True,
-        requires_job=True
-    ).order_by('code')
-
-    non_job_codes = WorkCode.objects.filter(
-        is_active=True,
-        requires_job=False
-    ).order_by('code')
-
-    hour_options = ["0","0.25","0.5","0.75","1","1.25","1.5","2","3","4","5","6","7","8"]
-    drive_time_options = ["0","0.25","0.5","0.75","1","1.25","1.5","2"]
-
-    selected_date = request.GET.get('date') or date.today().isoformat()
-    selected_date_obj = datetime.strptime(selected_date, "%Y-%m-%d").date()
-
+    selected_date_obj = parse_work_date(request.GET.get('date'))
+    selected_date = selected_date_obj.isoformat()
     employee, _ = Employee.objects.get_or_create(user=request.user)
 
-    # ================= SAVE =================
     if request.method == 'POST':
-        work_date = request.POST.get('date') or selected_date
-        work_date_obj = datetime.strptime(work_date, "%Y-%m-%d").date()
+        work_date_obj = parse_work_date(request.POST.get('date') or selected_date)
+        indices = sorted({
+            key.rsplit('_', 1)[1]
+            for key in request.POST
+            if key.startswith(('job_', 'work_code_', 'non_job_code_', 'hours_', 'drive_time_', 'mileage_', 'comments_'))
+            and '_' in key
+        })
 
-        for key in request.POST:
-            if key.startswith('job_'):
+        for index in indices:
+            job_raw = (request.POST.get(f'job_{index}') or '').strip()
+            wc_raw = (request.POST.get(f'work_code_{index}') or '').strip()
+            non_job_code_val = (request.POST.get(f'non_job_code_{index}') or '').strip()
+            hours = (request.POST.get(f'hours_{index}') or '').strip()
+            drive_time = (request.POST.get(f'drive_time_{index}') or '').strip()
+            mileage = (request.POST.get(f'mileage_{index}') or '').strip()
+            comments = (request.POST.get(f'comments_{index}') or '').strip()
 
-                index = key.split('_')[1]
+            if not any([job_raw, wc_raw, non_job_code_val, hours, drive_time, mileage, comments]):
+                continue
 
-                job_raw = request.POST.get(f'job_{index}')
-                wc_raw = request.POST.get(f'work_code_{index}')
-                non_job_code_val = request.POST.get(f'non_job_code_{index}')
+            if not hours or not drive_time or mileage == "":
+                continue
 
-                hours = request.POST.get(f'hours_{index}')
-                drive_time = request.POST.get(f'drive_time_{index}')
-                mileage = request.POST.get(f'mileage_{index}')
-                comments = request.POST.get(f'comments_{index}')
+            job = None
+            if job_raw:
+                job_number = job_raw.split('|')[0].strip()
+                job = Job.objects.filter(job_number=job_number).first()
 
-                # Skip empty rows
-                if not any([job_raw, wc_raw, non_job_code_val, hours, drive_time, mileage]):
+            work_code = None
+            if wc_raw:
+                wc_code = wc_raw.split('-')[0].strip()
+                work_code = WorkCode.objects.filter(code=wc_code).first()
+
+            if non_job_code_val:
+                if work_code is not None:
                     continue
+                work_code = WorkCode.objects.filter(code=non_job_code_val).first()
 
-                # Required
-                if not hours or not drive_time or mileage == "":
-                    continue
+            if not work_code:
+                continue
 
-                # ===== JOB PARSE =====
-                job = None
-                if job_raw:
-                    try:
-                        job_number = job_raw.split('|')[0].strip()
-                        job = Job.objects.filter(job_number=job_number).first()
-                    except:
-                        job = None
+            if work_code.requires_job and not job:
+                continue
 
-                # ===== WORK CODE PARSE =====
-                work_code = None
+            try:
+                hours_value = Decimal(hours)
+                drive_time_value = Decimal(drive_time)
+                mileage_value = Decimal(mileage)
+            except InvalidOperation:
+                continue
 
-                if wc_raw:
-                    try:
-                        wc_code = wc_raw.split('-')[0].strip()
-                        work_code = WorkCode.objects.filter(code=wc_code).first()
-                    except:
-                        work_code = None
+            TimeEntry.objects.create(
+                employee=employee,
+                job=job,
+                work_code=work_code,
+                work_date=work_date_obj,
+                hours_worked=hours_value,
+                drive_time=drive_time_value,
+                mileage=mileage_value,
+                comments=comments,
+            )
 
-                if non_job_code_val:
-                    work_code = WorkCode.objects.filter(code=non_job_code_val).first()
+        return redirect(f"/timesheet/?date={work_date_obj.isoformat()}")
 
-                # Validation
-                if wc_raw and non_job_code_val:
-                    continue
-
-                if not work_code:
-                    continue
-
-                if work_code.requires_job and not job:
-                    continue
-
-                # SAVE
-                TimeEntry.objects.create(
-                    employee=employee,
-                    job=job,
-                    work_code=work_code,
-                    work_date=work_date_obj,
-                    hours_worked=float(hours),
-                    drive_time=float(drive_time),
-                    mileage=float(mileage),
-                    comments=comments,
-                )
-
-        return redirect(f'/timesheet/?date={work_date}')
-
-    # ================= LOAD EXISTING =================
     entries = TimeEntry.objects.filter(
         employee=employee,
         work_date=selected_date_obj
     ).select_related('job', 'work_code').order_by('id')
 
-    # 🔥 RESTORED TOTALS
-    total_hours = sum(e.hours_worked for e in entries)
-    total_miles = sum(e.mileage for e in entries)
+    total_hours = sum(entry.hours_worked for entry in entries)
+    total_miles = sum(entry.mileage for entry in entries)
 
     return render(request, 'core/timesheet.html', {
         'jobs': jobs,
@@ -155,36 +141,26 @@ def timesheet(request):
         'drive_time_options': drive_time_options,
         'entries': entries,
         'total_hours': total_hours,
-        'total_miles': total_miles
+        'total_miles': total_miles,
     })
 
-# ================= DELETE =================
+
 @login_required
+@require_POST
 def delete_entry(request, entry_id):
-    entry = TimeEntry.objects.get(id=entry_id)
+    entry = get_object_or_404(TimeEntry, id=entry_id)
 
     if entry.employee.user != request.user:
-        return redirect('/timesheet/')
+        return redirect('timesheet')
 
     date_str = entry.work_date.strftime("%Y-%m-%d")
     entry.delete()
-
     return redirect(f'/timesheet/?date={date_str}')
 
 
-# ================= EXPORT =================
 @login_required
 def export_timesheet(request):
-    work_date = request.GET.get('date')
-
-    if work_date:
-        try:
-            work_date = datetime.strptime(work_date, "%Y-%m-%d").date()
-        except:
-            work_date = date.today()
-    else:
-        work_date = date.today()
-
+    work_date = parse_work_date(request.GET.get('date'))
     employee, _ = Employee.objects.get_or_create(user=request.user)
 
     entries = TimeEntry.objects.filter(
@@ -194,22 +170,20 @@ def export_timesheet(request):
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="timesheet.csv"'
-
     writer = csv.writer(response)
 
     writer.writerow([
-        'EntryDate','EmployeeCode','Employee_Name','WorkDate','DayOfWeek',
-        'LineNumber','JobNumber','Job_Address','Job_Name','Work_Code',
-        'Hours_Worked','Drive_Time','Mileage','Comments','Logfield'
+        'EntryDate', 'EmployeeCode', 'Employee_Name', 'WorkDate', 'DayOfWeek',
+        'LineNumber', 'JobNumber', 'Job_Address', 'Job_Name', 'Work_Code',
+        'Hours_Worked', 'Drive_Time', 'Mileage', 'Comments', 'Logfield'
     ])
 
     for i, entry in enumerate(entries, start=1):
         formatted_date = entry.work_date.strftime('%d-%b-%y')
-
         writer.writerow([
             formatted_date,
             request.user.username,
-            f"{request.user.first_name} {request.user.last_name}".upper(),
+            f"{request.user.first_name} {request.user.last_name}".upper().strip(),
             formatted_date,
             entry.work_date.strftime('%A'),
             i,

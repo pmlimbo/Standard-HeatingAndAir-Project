@@ -1,165 +1,269 @@
 {% extends "core/base.html" %}
 {% block content %}
+<h2 class="page-title">Employee Timesheet</h2>
+
 {% if entries %}
 <div class="card">
     <h3>Saved Entries</h3>
-
     {% for entry in entries %}
-        <div style="border-bottom:1px solid #ddd; padding:10px;">
-            <strong>
-                {% if entry.job %}
-                    {{ entry.job.job_number }}
-                {% endif %}
-            </strong>
+    <div style="border-bottom:1px solid #ddd; padding:10px 0;">
+        <strong>
+            {% if entry.job %}
+                {{ entry.job.job_number }}
+            {% else %}
+                Non-job entry
+            {% endif %}
+        </strong>
+        | {{ entry.work_code.code }}
+        | {{ entry.hours_worked }} hrs
+        | {{ entry.drive_time }} drive
+        | {{ entry.mileage }} miles
 
-            | {{ entry.work_code.code }}
-            | {{ entry.hours_worked }} hrs
-            | {{ entry.drive_time }} drive
-            | {{ entry.mileage }} miles
+        {% if entry.comments %}
+        <div class="muted">{{ entry.comments }}</div>
+        {% endif %}
 
-            <br>
-            <a href="/delete-entry/{{ entry.id }}/">Delete</a>
-        </div>
+        <form method="post" action="{% url 'delete_entry' entry.id %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit" class="danger-button">Delete</button>
+        </form>
+    </div>
     {% endfor %}
 </div>
 {% endif %}
-<h2>Employee Timesheet</h2>
 
 <form method="post">
-{% csrf_token %}
+    {% csrf_token %}
 
-<label>Date:</label>
-<input type="date" name="date" value="{{ selected_date }}"
-       onchange="window.location='?date=' + this.value">
+    <label>Date:</label>
+    <input type="date" name="date" value="{{ selected_date }}" onchange="window.location='?date=' + this.value">
 
-<hr>
+    <hr>
 
-<div id="jobs-container">
+    <div id="jobs-container">
+        <div class="card job-block" data-index="1">
+            <h3>Entry 1</h3>
 
-<div class="card job-block">
+            <div class="entry-row">
+                <div>
+                    <label>Job Number:</label>
+                    <div class="dropdown-wrapper">
+                        <input type="text" name="job_1" class="job-input" autocomplete="off">
+                        <div class="dropdown-list job-dropdown">
+                            {% for job in jobs %}
+                            <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-<h3>Job</h3>
+                <div>
+                    <label>Work Code:</label>
+                    <div class="dropdown-wrapper">
+                        <input type="text" name="work_code_1" class="workcode-input" autocomplete="off">
+                        <div class="dropdown-list workcode-dropdown">
+                            {% for wc in workcodes %}
+                            <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-<!-- JOB -->
-<label>Job Number:</label>
-<div class="dropdown-wrapper">
-    <input type="text" name="job_1" class="job-input">
-    <div class="dropdown-list job-dropdown">
-        {% for job in jobs %}
-        <div class="dropdown-item">
-            {{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}
+                <div>
+                    <label>Non Job Code:</label>
+                    <select name="non_job_code_1">
+                        <option value="">Select</option>
+                        {% for wc in non_job_codes %}
+                        <option value="{{ wc.code }}">{{ wc.code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Hours:</label>
+                    <select name="hours_1" class="hours-input">
+                        {% for i in hour_options %}
+                        <option value="{{ i }}">{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Drive Time:</label>
+                    <select name="drive_time_1">
+                        {% for i in drive_time_options %}
+                        <option value="{{ i }}">{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Miles:</label>
+                    <input type="number" name="mileage_1" class="mileage-input" min="0" step="0.01">
+                </div>
+
+                <div>
+                    <label>Comments:</label>
+                    <textarea name="comments_1"></textarea>
+                </div>
+            </div>
         </div>
-        {% endfor %}
     </div>
-</div>
 
-<!-- WORK CODE -->
-<label>Work Code:</label>
-<div class="dropdown-wrapper">
-    <input type="text" name="work_code_1" class="workcode-input">
-    <div class="dropdown-list workcode-dropdown">
-        {% for wc in workcodes %}
-        <div class="dropdown-item">
-            {{ wc.code }} - {{ wc.description }}
-        </div>
-        {% endfor %}
+    <div class="button-row">
+        <button type="button" class="secondary-button" onclick="addJob()">+ Add Another Entry</button>
+        <button type="submit">Save</button>
+        <a href="{% url 'export_timesheet' %}?date={{ selected_date }}">Export CSV</a>
     </div>
-</div>
-
-<!-- NON JOB -->
-<label>Non Job Code:</label>
-<select name="non_job_code_1">
-    <option value="">Select</option>
-    {% for wc in non_job_codes %}
-    <option value="{{ wc.code }}">{{ wc.code }}</option>
-    {% endfor %}
-</select>
-
-<!-- HOURS -->
-<label>Hours:</label>
-<select name="hours_1">
-    {% for i in hour_options %}
-    <option value="{{ i }}">{{ i }}</option>
-    {% endfor %}
-</select>
-
-<!-- DRIVE -->
-<label>Drive Time:</label>
-<select name="drive_time_1">
-    {% for i in drive_time_options %}
-    <option value="{{ i }}">{{ i }}</option>
-    {% endfor %}
-</select>
-
-<label>Miles:</label>
-<input type="number" name="mileage_1">
-
-<label>Comments:</label>
-<textarea name="comments_1"></textarea>
-
-</div>
-</div>
-
-<button type="button" onclick="addJob()">+ Add Another Job</button>
-<button type="submit">Save</button>
-
 </form>
 
+<template id="job-template">
+    <div class="card job-block" data-index="__prefix__">
+        <h3>Entry __prefix__</h3>
+        <div class="entry-row">
+            <div>
+                <label>Job Number:</label>
+                <div class="dropdown-wrapper">
+                    <input type="text" name="job___prefix__" class="job-input" autocomplete="off">
+                    <div class="dropdown-list job-dropdown">
+                        {% for job in jobs %}
+                        <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label>Work Code:</label>
+                <div class="dropdown-wrapper">
+                    <input type="text" name="work_code___prefix__" class="workcode-input" autocomplete="off">
+                    <div class="dropdown-list workcode-dropdown">
+                        {% for wc in workcodes %}
+                        <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label>Non Job Code:</label>
+                <select name="non_job_code___prefix__">
+                    <option value="">Select</option>
+                    {% for wc in non_job_codes %}
+                    <option value="{{ wc.code }}">{{ wc.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Hours:</label>
+                <select name="hours___prefix__" class="hours-input">
+                    {% for i in hour_options %}
+                    <option value="{{ i }}">{{ i }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Drive Time:</label>
+                <select name="drive_time___prefix__">
+                    {% for i in drive_time_options %}
+                    <option value="{{ i }}">{{ i }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Miles:</label>
+                <input type="number" name="mileage___prefix__" class="mileage-input" min="0" step="0.01">
+            </div>
+
+            <div>
+                <label>Comments:</label>
+                <textarea name="comments___prefix__"></textarea>
+            </div>
+        </div>
+    </div>
+</template>
+
 <script>
-function setupDropdown(inputClass, dropdownClass) {
+let nextIndex = 2;
 
-document.querySelectorAll(inputClass).forEach(input => {
+function setupDropdown(input) {
+    if (input.dataset.dropdownBound === 'true') {
+        return;
+    }
 
-const dropdown = input.parentElement.querySelector(dropdownClass);
+    const dropdown = input.parentElement.querySelector('.dropdown-list');
+    if (!dropdown) {
+        return;
+    }
 
-input.addEventListener('focus', () => {
-dropdown.style.display = 'block';
-});
+    input.dataset.dropdownBound = 'true';
 
-input.addEventListener('input', () => {
-const val = input.value.toLowerCase();
+    input.addEventListener('focus', () => {
+        dropdown.style.display = 'block';
+    });
 
-dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-item.style.display =
-item.innerText.toLowerCase().includes(val)
-? 'block' : 'none';
-});
-});
+    input.addEventListener('input', () => {
+        const value = input.value.toLowerCase();
+        dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+            item.style.display = item.innerText.toLowerCase().includes(value) ? 'block' : 'none';
+        });
+    });
 
-dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-item.addEventListener('click', () => {
-input.value = item.innerText;
-dropdown.style.display = 'none';
-});
-});
-
-document.addEventListener('click', (e) => {
-if (!input.parentElement.contains(e.target)) {
-dropdown.style.display = 'none';
-}
-});
-
-});
+    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
+        item.addEventListener('click', () => {
+            input.value = item.innerText.trim();
+            dropdown.style.display = 'none';
+        });
+    });
 }
 
-function addJob(){
-let container = document.getElementById('jobs-container');
-let block = container.children[0].cloneNode(true);
+function updateTotals() {
+    const hours = Array.from(document.querySelectorAll('.hours-input'))
+        .reduce((sum, element) => sum + Number(element.value || 0), 0);
+    const miles = Array.from(document.querySelectorAll('.mileage-input'))
+        .reduce((sum, element) => sum + Number(element.value || 0), 0);
 
-block.querySelectorAll('input, textarea').forEach(e => e.value = '');
-container.appendChild(block);
+    document.getElementById('total-hours').innerText = hours.toFixed(2);
+    document.getElementById('total-miles').innerText = miles.toFixed(2);
+}
 
-setupDropdown('.job-input','.job-dropdown');
-setupDropdown('.workcode-input','.workcode-dropdown');
+function bindRow(block) {
+    block.querySelectorAll('.job-input, .workcode-input').forEach(setupDropdown);
+    block.querySelectorAll('.hours-input, .mileage-input').forEach(element => {
+        element.addEventListener('input', updateTotals);
+        element.addEventListener('change', updateTotals);
+    });
+}
+
+function addJob() {
+    const container = document.getElementById('jobs-container');
+    const template = document.getElementById('job-template').innerHTML.replaceAll('__prefix__', String(nextIndex));
+    container.insertAdjacentHTML('beforeend', template);
+    bindRow(container.lastElementChild);
+    nextIndex += 1;
+    updateTotals();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-setupDropdown('.job-input','.job-dropdown');
-setupDropdown('.workcode-input','.workcode-dropdown');
+    document.querySelectorAll('.job-block').forEach(bindRow);
+    document.addEventListener('click', event => {
+        document.querySelectorAll('.dropdown-wrapper').forEach(wrapper => {
+            if (!wrapper.contains(event.target)) {
+                const dropdown = wrapper.querySelector('.dropdown-list');
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+            }
+        });
+    });
+    updateTotals();
 });
 </script>
 
-<div class="card">
+<div class="card summary">
     <h4>Saved Totals</h4>
     <p>Total Hours: {{ total_hours }}</p>
     <p>Total Miles: {{ total_miles }}</p>
@@ -168,5 +272,4 @@ setupDropdown('.workcode-input','.workcode-dropdown');
     <p>Total Hours: <span id="total-hours">0.00</span></p>
     <p>Total Miles: <span id="total-miles">0.00</span></p>
 </div>
-
 {% endblock %}

@@ -1,134 +1,197 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    {% load static %}
+    <meta charset="utf-8">
     <title>Employee Timesheet</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <style>
-        body {
-            font-family: Arial;
-            margin: 0;
-            background: #f5f7fa;
+        :root {
+            color-scheme: light;
+            --bg: #f4f6f8;
+            --surface: #ffffff;
+            --surface-alt: #eef3f7;
+            --text: #1f2933;
+            --muted: #52606d;
+            --border: #d9e2ec;
+            --accent: #1e3a5f;
+            --accent-strong: #16324f;
+            --danger: #a61b1b;
         }
 
-        .container {
-            max-width: 600px;
-            margin: auto;
-            padding: 20px;
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(180deg, #eef2f6 0%, var(--bg) 100%);
+            color: var(--text);
         }
 
         .header {
             text-align: center;
-            padding: 20px;
-            background: #fff;
+            padding: 24px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
         }
 
         .header img {
             max-width: 150px;
         }
 
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
         .nav {
-            text-align: center;
-            margin: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin: 18px 0;
         }
 
         .card {
-            background: #fff;
-            padding: 15px;
+            margin-bottom: 16px;
+            padding: 18px;
+            border: 1px solid rgba(217, 226, 236, 0.8);
             border-radius: 8px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 6px rgba(0,0,0,.1);
+            background: var(--surface);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+            overflow: visible;
         }
 
         input, select, textarea {
             width: 100%;
-            padding: 8px;
             margin-top: 5px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
         }
 
         button {
-            width: 100%;
-            padding: 10px;
+            padding: 10px 14px;
             margin-top: 10px;
-            background: #1e3a5f;
-            color: white;
             border: none;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
         }
 
-        /* 🔥 DROPDOWN FIX */
+        button:hover {
+            background: var(--accent-strong);
+        }
+
+        a {
+            color: var(--accent);
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
         .dropdown-wrapper {
             position: relative;
         }
 
         .dropdown-list {
-        position: relative;   /* 🔥 CHANGE THIS */
-        width: 100%;
-        max-height: 200px;
-        overflow-y: auto;
-
-        background: white;
-        border: 1px solid #ccc;
-        margin-top: 5px;
-
-        display: none;
-       }
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            max-height: 220px;
+            overflow-y: auto;
+            display: none;
+            margin-top: 4px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+        }
 
         .dropdown-item {
-            padding: 8px;
+            padding: 8px 10px;
             cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
         }
 
         .dropdown-item:hover {
-            background: #eee;
+            background: var(--surface-alt);
         }
-    /* FIX DROPDOWN POSITIONING */
-    .dropdown-wrapper {
-        position: relative;
-    }
 
-    /* THIS IS THE KEY FIX */
+        .entry-row {
+            display: grid;
+            gap: 12px;
+        }
 
+        .summary {
+            display: grid;
+            gap: 8px;
+        }
 
-    /* Prevent visual overflow issues */
-    .card {
-        overflow: visible;   /* 🔥 THIS FIXES THE "cut off / hanging" issue */
-    }
-        </style>
-    </head>
+        .danger-button {
+            background: var(--danger);
+        }
 
-    <body>
-    .dropdown-item {
-        border-bottom: 1px solid #eee;
-    }
+        .danger-button:hover {
+            background: #851616;
+        }
 
-    .dropdown-item:last-child {
-        border-bottom: none;
-    }
-{% load static %}
+        .secondary-button {
+            background: #486581;
+        }
 
+        .secondary-button:hover {
+            background: #334e68;
+        }
+
+        .inline-form {
+            display: inline;
+        }
+
+        .page-title {
+            margin-top: 0;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
 <div class="header">
-    <img src="{% static 'core/Standard_AC_color_logo.png' %}">
+    <img src="{% static 'core/Standard_AC_color_logo.png' %}" alt="Standard AC logo">
     <h2>Employee Timesheet</h2>
-    <a href="https://standardac.com/" target="_blank">Go to Main Website</a>
+    <a href="https://standardac.com/" target="_blank" rel="noreferrer">Go to Main Website</a>
 </div>
 
 <div class="container">
+    {% if user.is_authenticated %}
+    <div class="nav">
+        <a href="{% url 'timesheet' %}">Timesheet</a>
+        <a href="{% url 'reports' %}">Reports</a>
+        <a href="{% url 'add_customer' %}">Add Customer</a>
+        <form action="/accounts/logout/" method="post" class="inline-form">
+            {% csrf_token %}
+            <button type="submit">Logout</button>
+        </form>
+    </div>
+    {% endif %}
 
-{% if user.is_authenticated %}
-<div class="nav">
-    <a href="/timesheet/">Timesheet</a>
-    <a href="/reports/">Reports</a>
-
-    <form action="/accounts/logout/" method="post" style="display:inline;">
-        {% csrf_token %}
-        <button style="width:auto;">Logout</button>
-    </form>
+    {% block content %}{% endblock %}
 </div>
-{% endif %}
-
-{% block content %}{% endblock %}
-
-</div>
-
 </body>
 </html>

@@ -59,6 +59,7 @@ def run():
 
                 if emp_created:
                     print(f"          Employee record created")
+                    created_employees += 1
 
                 print(f"         Name: {first_name} {last_name}")
                 print(f"         Password set\n")

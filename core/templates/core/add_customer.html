@@ -1,16 +1,15 @@
-<form action="/accounts/logout/" method="post">
-    {% csrf_token %}
-    <button type="submit">Logout</button>
-</form>
+{% extends "core/base.html" %}
 
-
-<h1>Add Customer</h1>
-git
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save</button>
-</form>
-
-<button type="submit">Save</button>
-<a href="/" style="margin-left:10px;">Cancel</a>
+{% block content %}
+<div class="card">
+    <h1 class="page-title">Add Customer</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="button-row">
+            <button type="submit">Save</button>
+            <a href="{% url 'timesheet' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

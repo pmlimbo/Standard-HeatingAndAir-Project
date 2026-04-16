@@ -1,43 +1,15 @@
 {% extends "core/base.html" %}
 
 {% block content %}
-
-
-<!DOCTYPE html>
-<html>
-<form action="/accounts/logout/" method="post">
-    {% csrf_token %}
-    <button type="submit">Logout</button>
-</form>
-<head>
-{% if user.is_superuser or user.is_staff or user.groups.all.0.name == "Authorized" %}
-    <a href="/reports/">Reports</a>
-{% endif %}
-    <title>Customers</title>
-</head>
-<body>
-    <h1>Customer List</h1>
-
+<div class="card">
+    <h1 class="page-title">Customer List</h1>
     <ul>
         {% for customer in customers %}
             <li>{{ customer.name }} - {{ customer.email }}</li>
+        {% empty %}
+            <li>No customers yet.</li>
         {% endfor %}
     </ul>
-    <a href="/add/">Add Customer</a>
-</body>
-
-<h2>Select Work Code</h2>
-
-<select name="work_code">
-    <option value="">-- Select Work Code --</option>
-    {% for wc in workcodes %}
-        <option value="{{ wc.id }}">
-            {{ wc.code }} - {{ wc.description }}
-        </option>
-    {% endfor %}
-</select>
-
-
-</html>
-
+    <a href="{% url 'add_customer' %}">Add Customer</a>
+</div>
 {% endblock %}

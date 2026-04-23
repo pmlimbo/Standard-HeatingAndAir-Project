@@ -183,7 +183,9 @@
     <div class="nav">
         <a href="{% url 'timesheet' %}">Timesheet</a>
         <a href="{% url 'reports' %}">Reports</a>
+        {% if request.resolver_match.url_name != 'timesheet' and request.resolver_match.url_name != 'home' %}
         <a href="{% url 'add_customer' %}">Add Customer</a>
+        {% endif %}
         <form action="/accounts/logout/" method="post" class="inline-form">
             {% csrf_token %}
             <button type="submit">Logout</button>

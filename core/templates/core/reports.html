@@ -4,6 +4,65 @@
 <div class="card">
     <h1 class="page-title">Reports</h1>
     <p>Only authorized users can see this page.</p>
-    <p class="muted">Reporting features have not been implemented yet.</p>
+    <p class="muted">Export jobs lists for a single day or a date range.</p>
+</div>
+
+<div class="card">
+    <h3>Single Day Export</h3>
+    <form method="get" action="{% url 'export_jobs_list' %}">
+        <input type="hidden" name="export_type" value="single">
+
+        <label>Work Date:</label>
+        <input type="date" name="date" value="{{ today }}">
+
+        <label>Employee:</label>
+        <select name="employee">
+            <option value="all">All Employees</option>
+            {% for employee in employees %}
+            <option value="{{ employee.id }}">
+                {% if employee.user.first_name or employee.user.last_name %}
+                {{ employee.user.first_name }} {{ employee.user.last_name }} ({{ employee.user.username }})
+                {% else %}
+                {{ employee.user.username }}
+                {% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+        <div class="button-row">
+            <button type="submit">Export CSV</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Date Range Export</h3>
+    <form method="get" action="{% url 'export_jobs_list' %}">
+        <input type="hidden" name="export_type" value="range">
+
+        <label>Start Date:</label>
+        <input type="date" name="start_date" value="{{ today }}">
+
+        <label>End Date:</label>
+        <input type="date" name="end_date" value="{{ today }}">
+
+        <label>Employee:</label>
+        <select name="employee">
+            <option value="all">All Employees</option>
+            {% for employee in employees %}
+            <option value="{{ employee.id }}">
+                {% if employee.user.first_name or employee.user.last_name %}
+                {{ employee.user.first_name }} {{ employee.user.last_name }} ({{ employee.user.username }})
+                {% else %}
+                {{ employee.user.username }}
+                {% endif %}
+            </option>
+            {% endfor %}
+        </select>
+
+        <div class="button-row">
+            <button type="submit">Export CSV</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

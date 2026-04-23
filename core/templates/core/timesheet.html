@@ -23,6 +23,15 @@
         <div class="muted">{{ entry.comments }}</div>
         {% endif %}
 
+        {% if editing_entry and editing_entry.id == entry.id %}
+        <div class="muted">Currently editing this entry.</div>
+        {% endif %}
+
+        <form method="get" action="{% url 'timesheet' %}" class="inline-form">
+            <input type="hidden" name="date" value="{{ selected_date }}">
+            <input type="hidden" name="edit" value="{{ entry.id }}">
+            <button type="submit" class="secondary-button">Edit</button>
+        </form>
         <form method="post" action="{% url 'delete_entry' entry.id %}" class="inline-form">
             {% csrf_token %}
             <button type="submit" class="danger-button">Delete</button>
@@ -34,21 +43,29 @@
 
 <form method="post">
     {% csrf_token %}
+    {% if editing_entry %}
+    <input type="hidden" name="editing_entry_id" value="{{ editing_entry.id }}">
+    {% endif %}
 
     <label>Date:</label>
-    <input type="date" name="date" value="{{ selected_date }}" onchange="window.location='?date=' + this.value">
+    <input
+        type="date"
+        name="date"
+        value="{{ selected_date }}"
+        {% if not editing_entry %}onchange="window.location='?date=' + this.value"{% endif %}
+    >
 
     <hr>
 
     <div id="jobs-container">
         <div class="card job-block" data-index="1">
-            <h3>Entry 1</h3>
+            <h3>{% if editing_entry %}Edit Entry{% else %}Entry 1{% endif %}</h3>
 
             <div class="entry-row">
                 <div>
                     <label>Job Number:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="job_1" class="job-input" autocomplete="off">
+                        <input type="text" name="job_1" class="job-input" autocomplete="off" value="{{ form_values.job }}">
                         <div class="dropdown-list job-dropdown">
                             {% for job in jobs %}
                             <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
@@ -60,7 +77,7 @@
                 <div>
                     <label>Work Code:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="work_code_1" class="workcode-input" autocomplete="off">
+                        <input type="text" name="work_code_1" class="workcode-input" autocomplete="off" value="{{ form_values.work_code }}">
                         <div class="dropdown-list workcode-dropdown">
                             {% for wc in workcodes %}
                             <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
@@ -74,7 +91,7 @@
                     <select name="non_job_code_1">
                         <option value="">Select</option>
                         {% for wc in non_job_codes %}
-                        <option value="{{ wc.code }}">{{ wc.code }}</option>
+                        <option value="{{ wc.code }}"{% if form_values.non_job_code == wc.code %} selected{% endif %}>{{ wc.code }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -83,7 +100,7 @@
                     <label>Hours:</label>
                     <select name="hours_1" class="hours-input">
                         {% for i in hour_options %}
-                        <option value="{{ i }}">{{ i }}</option>
+                        <option value="{{ i }}"{% if form_values.hours == i %} selected{% endif %}>{{ i }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -92,31 +109,37 @@
                     <label>Drive Time:</label>
                     <select name="drive_time_1">
                         {% for i in drive_time_options %}
-                        <option value="{{ i }}">{{ i }}</option>
+                        <option value="{{ i }}"{% if form_values.drive_time == i %} selected{% endif %}>{{ i }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div>
                     <label>Miles:</label>
-                    <input type="number" name="mileage_1" class="mileage-input" min="0" step="0.01">
+                    <input type="number" name="mileage_1" class="mileage-input" min="0" step="0.01" value="{{ form_values.mileage }}">
                 </div>
 
                 <div>
                     <label>Comments:</label>
-                    <textarea name="comments_1"></textarea>
+                    <textarea name="comments_1">{{ form_values.comments }}</textarea>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="button-row">
+        {% if not editing_entry %}
         <button type="button" class="secondary-button" onclick="addJob()">+ Add Another Entry</button>
-        <button type="submit">Save</button>
+        {% endif %}
+        <button type="submit">{% if editing_entry %}Update Entry{% else %}Save{% endif %}</button>
+        {% if editing_entry %}
+        <a href="{% url 'timesheet' %}?date={{ selected_date }}">Cancel Edit</a>
+        {% endif %}
         <a href="{% url 'export_timesheet' %}?date={{ selected_date }}">Export CSV</a>
     </div>
 </form>
 
+{% if not editing_entry %}
 <template id="job-template">
     <div class="card job-block" data-index="__prefix__">
         <h3>Entry __prefix__</h3>
@@ -185,6 +208,7 @@
         </div>
     </div>
 </template>
+{% endif %}
 
 <script>
 let nextIndex = 2;
@@ -240,7 +264,12 @@ function bindRow(block) {
 
 function addJob() {
     const container = document.getElementById('jobs-container');
-    const template = document.getElementById('job-template').innerHTML.replaceAll('__prefix__', String(nextIndex));
+    const templateElement = document.getElementById('job-template');
+    if (!templateElement) {
+        return;
+    }
+
+    const template = templateElement.innerHTML.replaceAll('__prefix__', String(nextIndex));
     container.insertAdjacentHTML('beforeend', template);
     bindRow(container.lastElementChild);
     nextIndex += 1;

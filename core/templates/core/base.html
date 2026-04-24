@@ -41,6 +41,15 @@
             max-width: 150px;
         }
 
+        .header-links {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
         .container {
             max-width: 900px;
             margin: 0 auto;
@@ -76,8 +85,7 @@
         }
 
         button {
-            padding: 10px 14px;
-            margin-top: 10px;
+            padding: 10px 14px 12px;
             border: none;
             border-radius: 6px;
             background: var(--accent);
@@ -93,11 +101,38 @@
             color: var(--accent);
         }
 
+        .button-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 10px 14px 12px;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+        }
+
+        .button-link:hover {
+            background: var(--accent-strong);
+            color: white;
+        }
+
         .button-row {
             display: flex;
             flex-wrap: wrap;
+            align-items: center;
             gap: 10px;
             margin-top: 12px;
+        }
+
+        .header-links a:not(.button-link),
+        .nav a,
+        .button-row a:not(.button-link) {
+            display: inline-flex;
+            align-items: center;
+            min-height: 42px;
+            padding-bottom: 2px;
         }
 
         .dropdown-wrapper {
@@ -158,8 +193,17 @@
             background: #334e68;
         }
 
+        .button-link.secondary-button {
+            background: #486581;
+        }
+
+        .button-link.secondary-button:hover {
+            background: #334e68;
+        }
+
         .inline-form {
-            display: inline;
+            display: inline-flex;
+            align-items: center;
         }
 
         .page-title {
@@ -175,7 +219,10 @@
 <div class="header">
     <img src="{% static 'core/Standard_AC_color_logo.png' %}" alt="Standard AC logo">
     <h2>Employee Timesheet</h2>
-    <a href="https://standardac.com/" target="_blank" rel="noreferrer">Go to Main Website</a>
+    <div class="header-links">
+        <a href="https://standardac.com/" target="_blank" rel="noreferrer">Go to Main Website</a>
+        {% block header_links_extra %}{% endblock %}
+    </div>
 </div>
 
 <div class="container">
@@ -183,9 +230,6 @@
     <div class="nav">
         <a href="{% url 'timesheet' %}">Timesheet</a>
         <a href="{% url 'reports' %}">Reports</a>
-        {% if request.resolver_match.url_name != 'timesheet' and request.resolver_match.url_name != 'home' %}
-        <a href="{% url 'add_customer' %}">Add Customer</a>
-        {% endif %}
         <form action="/accounts/logout/" method="post" class="inline-form">
             {% csrf_token %}
             <button type="submit">Logout</button>

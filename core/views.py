@@ -1,10 +1,12 @@
 import csv
+from urllib.parse import urlencode
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm
@@ -219,6 +221,29 @@ def get_timesheet_entries(employee, work_date):
     return entries, total_hours, total_miles
 
 
+def get_admin_access_context(user):
+    if not is_authorized(user):
+        return {
+            'show_admin_access': False,
+            'admin_access_url': '',
+            'admin_access_label': '',
+        }
+
+    admin_index_url = reverse('admin:index')
+    if user.is_staff or user.is_superuser:
+        return {
+            'show_admin_access': True,
+            'admin_access_url': admin_index_url,
+            'admin_access_label': 'Admin Page',
+        }
+
+    return {
+        'show_admin_access': True,
+        'admin_access_url': f"{reverse('admin:login')}?{urlencode({'next': admin_index_url})}",
+        'admin_access_label': 'Admin Login',
+    }
+
+
 def build_timesheet_context(
     *,
     jobs,
@@ -314,6 +339,7 @@ def reports(request):
     return render(request, 'core/reports.html', {
         'employees': employees,
         'today': today,
+        **get_admin_access_context(request.user),
     })
 
 

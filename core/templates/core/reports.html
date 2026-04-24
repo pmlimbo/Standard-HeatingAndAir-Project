@@ -1,5 +1,11 @@
 {% extends "core/base.html" %}
 
+{% block header_links_extra %}
+{% if show_admin_access %}
+<a href="{{ admin_access_url }}" class="button-link secondary-button">{{ admin_access_label }}</a>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <h1 class="page-title">Reports</h1>

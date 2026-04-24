@@ -83,6 +83,8 @@ class TimesheetViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse('add_customer'))
+        self.assertNotContains(response, 'Admin Login')
+        self.assertNotContains(response, 'Admin Page')
 
     def test_edit_mode_prefills_saved_entry(self):
         employee = Employee.objects.create(user=self.user)
@@ -277,6 +279,22 @@ class ReportsAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Single Day Export')
+        self.assertNotContains(response, reverse('add_customer'))
+        self.assertContains(response, 'Go to Main Website')
+        self.assertContains(response, 'Admin Login')
+        self.assertContains(response, reverse('admin:login'))
+
+    def test_reports_shows_admin_page_button_for_staff_user(self):
+        self.user.is_staff = True
+        self.user.save()
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('reports'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Admin Page')
+        self.assertContains(response, reverse('admin:index'))
+        self.assertNotContains(response, 'Admin Login')
 
 
 class ReportsExportTests(TestCase):

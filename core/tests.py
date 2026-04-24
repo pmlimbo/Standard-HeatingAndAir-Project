@@ -53,6 +53,25 @@ class TimesheetViewTests(TestCase):
         self.assertEqual(TimeEntry.objects.count(), 2)
         self.assertEqual(TimeEntry.objects.filter(job__isnull=True, work_code=self.non_job_code).count(), 1)
 
+    def test_timesheet_post_allows_blank_mileage(self):
+        response = self.client.post(
+            reverse('timesheet'),
+            data={
+                'date': '2026-04-16',
+                'job_1': 'JOB-100 | Test Job | 123 Main',
+                'work_code_1': '100 - Install',
+                'non_job_code_1': '',
+                'hours_1': '2',
+                'drive_time_1': '0.5',
+                'mileage_1': '',
+                'comments_1': 'Mileage optional',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(TimeEntry.objects.count(), 1)
+        self.assertEqual(str(TimeEntry.objects.get().mileage), '0.00')
+
     def test_invalid_date_falls_back_to_today(self):
         response = self.client.get(reverse('timesheet'), {'date': 'not-a-date'})
 
@@ -82,8 +101,8 @@ class TimesheetViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['editing_entry'].id, entry.id)
-        self.assertEqual(response.context['form_values']['job'], 'JOB-100 | Test Job | 123 Main')
-        self.assertEqual(response.context['form_values']['work_code'], '100 - Install')
+        self.assertEqual(response.context['form_rows'][0]['values']['job'], 'JOB-100 | Test Job | 123 Main')
+        self.assertEqual(response.context['form_rows'][0]['values']['work_code'], '100 - Install')
         self.assertContains(response, 'Update Entry')
 
     def test_edit_mode_updates_existing_entry(self):
@@ -123,6 +142,83 @@ class TimesheetViewTests(TestCase):
         self.assertEqual(str(entry.drive_time), '1.00')
         self.assertEqual(str(entry.mileage), '12.00')
         self.assertEqual(entry.comments, 'Updated entry')
+
+    def test_saved_entries_show_job_details_and_code_descriptions(self):
+        employee = Employee.objects.create(user=self.user)
+        TimeEntry.objects.create(
+            employee=employee,
+            job=self.job,
+            work_code=self.job_code,
+            work_date='2026-04-16',
+            hours_worked='2.00',
+            drive_time='0.50',
+            mileage='10.00',
+            comments='Job entry',
+        )
+        TimeEntry.objects.create(
+            employee=employee,
+            job=None,
+            work_code=self.non_job_code,
+            work_date='2026-04-16',
+            hours_worked='1.00',
+            drive_time='0.25',
+            mileage='0.00',
+            comments='Non job entry',
+        )
+
+        response = self.client.get(reverse('timesheet'), {'date': '2026-04-16'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'JOB-100 | Test Job | 123 Main')
+        self.assertContains(response, '100 - Install')
+        self.assertContains(response, 'SM - Safety Meeting')
+
+    def test_invalid_submission_shows_errors_and_keeps_values(self):
+        response = self.client.post(
+            reverse('timesheet'),
+            data={
+                'date': '2026-04-16',
+                'job_1': '',
+                'work_code_1': '100 - Install',
+                'non_job_code_1': '',
+                'hours_1': '2',
+                'drive_time_1': '0.5',
+                'mileage_1': '',
+                'comments_1': 'Keep this',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(TimeEntry.objects.count(), 0)
+        self.assertContains(response, 'Job Number is required when using a Work Code.')
+        self.assertContains(response, '100 - Install')
+        self.assertContains(response, 'Keep this')
+
+    def test_timesheet_requires_hours_greater_than_zero(self):
+        response = self.client.post(
+            reverse('timesheet'),
+            data={
+                'date': '2026-04-16',
+                'job_1': 'JOB-100 | Test Job | 123 Main',
+                'work_code_1': '100 - Install',
+                'non_job_code_1': '',
+                'hours_1': '0',
+                'drive_time_1': '0.5',
+                'mileage_1': '',
+                'comments_1': 'Hours missing',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(TimeEntry.objects.count(), 0)
+        self.assertContains(response, 'Hours must be greater than 0.')
+        self.assertContains(response, 'Hours missing')
+
+    def test_timesheet_shows_or_between_code_fields(self):
+        response = self.client.get(reverse('timesheet'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Or')
 
     def test_delete_requires_post(self):
         employee = Employee.objects.create(user=self.user)

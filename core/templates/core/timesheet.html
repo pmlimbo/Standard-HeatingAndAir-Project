@@ -10,11 +10,13 @@
         <strong>
             {% if entry.job %}
                 {{ entry.job.job_number }}
+                {% if entry.job.job_name %} | {{ entry.job.job_name }}{% endif %}
+                {% if entry.job.street_address %} | {{ entry.job.street_address }}{% endif %}
             {% else %}
                 Non-job entry
             {% endif %}
         </strong>
-        | {{ entry.work_code.code }}
+        | {{ entry.work_code.code }}{% if entry.work_code.description %} - {{ entry.work_code.description }}{% endif %}
         | {{ entry.hours_worked }} hrs
         | {{ entry.drive_time }} drive
         | {{ entry.mileage }} miles
@@ -41,6 +43,18 @@
 </div>
 {% endif %}
 
+{% if submission_errors %}
+<div class="card" style="border-color:#a61b1b;">
+    <h3 class="page-title" style="color:#a61b1b;">Please fix the required fields below</h3>
+    <ul style="margin:0; padding-left:18px; color:#a61b1b;">
+        {% for error in submission_errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{{ submission_errors|json_script:"timesheet-errors" }}
+{% endif %}
+
 <form method="post">
     {% csrf_token %}
     {% if editing_entry %}
@@ -58,14 +72,23 @@
     <hr>
 
     <div id="jobs-container">
-        <div class="card job-block" data-index="1">
-            <h3>{% if editing_entry %}Edit Entry{% else %}Entry 1{% endif %}</h3>
+        {% for row in form_rows %}
+        <div class="card job-block" data-index="{{ row.index }}">
+            <h3>{{ row.title }}</h3>
+
+            {% if row.errors %}
+            <div style="margin-bottom:12px; color:#a61b1b;">
+                {% for error in row.errors %}
+                <div>{{ error }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             <div class="entry-row">
                 <div>
                     <label>Job Number:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="job_1" class="job-input" autocomplete="off" value="{{ form_values.job }}">
+                        <input type="text" name="job_{{ row.index }}" class="job-input" autocomplete="off" value="{{ row.values.job }}">
                         <div class="dropdown-list job-dropdown">
                             {% for job in jobs %}
                             <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
@@ -77,7 +100,7 @@
                 <div>
                     <label>Work Code:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="work_code_1" class="workcode-input" autocomplete="off" value="{{ form_values.work_code }}">
+                        <input type="text" name="work_code_{{ row.index }}" class="workcode-input" autocomplete="off" value="{{ row.values.work_code }}">
                         <div class="dropdown-list workcode-dropdown">
                             {% for wc in workcodes %}
                             <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
@@ -86,45 +109,49 @@
                     </div>
                 </div>
 
+                <div class="muted" style="font-weight:bold; text-align:left;">Or</div>
+
                 <div>
                     <label>Non Job Code:</label>
-                    <select name="non_job_code_1">
+                    <select name="non_job_code_{{ row.index }}">
                         <option value="">Select</option>
                         {% for wc in non_job_codes %}
-                        <option value="{{ wc.code }}"{% if form_values.non_job_code == wc.code %} selected{% endif %}>{{ wc.code }}</option>
+                        <option value="{{ wc.code }}"{% if row.values.non_job_code == wc.code %} selected{% endif %}>{{ wc.code }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div>
                     <label>Hours:</label>
-                    <select name="hours_1" class="hours-input">
+                    <select name="hours_{{ row.index }}" class="hours-input">
+                        <option value=""{% if row.values.hours == '' %} selected{% endif %}>Select</option>
                         {% for i in hour_options %}
-                        <option value="{{ i }}"{% if form_values.hours == i %} selected{% endif %}>{{ i }}</option>
+                        <option value="{{ i }}"{% if row.values.hours == i %} selected{% endif %}>{{ i }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div>
                     <label>Drive Time:</label>
-                    <select name="drive_time_1">
+                    <select name="drive_time_{{ row.index }}">
                         {% for i in drive_time_options %}
-                        <option value="{{ i }}"{% if form_values.drive_time == i %} selected{% endif %}>{{ i }}</option>
+                        <option value="{{ i }}"{% if row.values.drive_time == i %} selected{% endif %}>{{ i }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div>
                     <label>Miles:</label>
-                    <input type="number" name="mileage_1" class="mileage-input" min="0" step="0.01" value="{{ form_values.mileage }}">
+                    <input type="number" name="mileage_{{ row.index }}" class="mileage-input" min="0" step="0.01" value="{{ row.values.mileage }}">
                 </div>
 
                 <div>
                     <label>Comments:</label>
-                    <textarea name="comments_1">{{ form_values.comments }}</textarea>
+                    <textarea name="comments_{{ row.index }}">{{ row.values.comments }}</textarea>
                 </div>
             </div>
         </div>
+        {% endfor %}
     </div>
 
     <div class="button-row">
@@ -168,6 +195,8 @@
                 </div>
             </div>
 
+            <div class="muted" style="font-weight:bold; text-align:left;">Or</div>
+
             <div>
                 <label>Non Job Code:</label>
                 <select name="non_job_code___prefix__">
@@ -181,6 +210,7 @@
             <div>
                 <label>Hours:</label>
                 <select name="hours___prefix__" class="hours-input">
+                    <option value="" selected>Select</option>
                     {% for i in hour_options %}
                     <option value="{{ i }}">{{ i }}</option>
                     {% endfor %}
@@ -211,7 +241,7 @@
 {% endif %}
 
 <script>
-let nextIndex = 2;
+let nextIndex = {{ next_index }};
 
 function setupDropdown(input) {
     if (input.dataset.dropdownBound === 'true') {
@@ -288,6 +318,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    const errorElement = document.getElementById('timesheet-errors');
+    if (errorElement) {
+        const errors = JSON.parse(errorElement.textContent);
+        if (errors.length) {
+            alert(['Please fix the required fields before saving:', ...errors].join('\n'));
+        }
+    }
+
     updateTotals();
 });
 </script>

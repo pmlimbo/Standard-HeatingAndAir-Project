@@ -4,9 +4,11 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import HttpResponse
+from django.db.models import Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm
@@ -27,6 +29,8 @@ TIMESHEET_EXPORT_HEADERS = [
     'LineNumber', 'JobNumber', 'Job_Address', 'Job_Name', 'Work_Code',
     'Hours_Worked', 'Drive_Time', 'Mileage', 'Comments', 'Logfield',
 ]
+
+LOOKUP_RESULT_LIMIT = 20
 
 
 def is_authorized(user):
@@ -59,6 +63,17 @@ def format_job_label(job):
 
 def format_work_code_label(work_code):
     return f"{work_code.code} - {work_code.description}"
+
+
+def format_employee_label(employee):
+    full_name = f"{employee.user.first_name} {employee.user.last_name}".strip()
+    if full_name:
+        return f"{full_name} ({employee.user.username})"
+    return employee.user.username
+
+
+def extract_lookup_value(value, separator):
+    return (value or '').partition(separator)[0].strip()
 
 
 def get_entry_indices(data):
@@ -123,14 +138,14 @@ def validate_time_entry_values(values, *, force_validation=False):
 
     job = None
     if values['job']:
-        job_number = values['job'].split('|')[0].strip()
+        job_number = extract_lookup_value(values['job'], ' | ')
         job = Job.objects.filter(job_number=job_number).first()
         if not job:
             errors.append('Select a valid Job Number.')
 
     work_code = None
     if values['work_code']:
-        work_code_value = values['work_code'].split('-')[0].strip()
+        work_code_value = extract_lookup_value(values['work_code'], ' - ')
         work_code = WorkCode.objects.filter(
             code=work_code_value,
             is_active=True,
@@ -139,8 +154,9 @@ def validate_time_entry_values(values, *, force_validation=False):
         if not work_code:
             errors.append('Select a valid Work Code.')
     elif values['non_job_code']:
+        non_job_code_value = extract_lookup_value(values['non_job_code'], ' - ')
         work_code = WorkCode.objects.filter(
-            code=values['non_job_code'],
+            code=non_job_code_value,
             is_active=True,
             requires_job=False,
         ).first()
@@ -194,7 +210,7 @@ def get_form_values(entry=None):
     return {
         'job': format_job_label(entry.job) if entry.job else '',
         'work_code': format_work_code_label(entry.work_code) if entry.work_code.requires_job else '',
-        'non_job_code': entry.work_code.code if not entry.work_code.requires_job else '',
+        'non_job_code': format_work_code_label(entry.work_code) if not entry.work_code.requires_job else '',
         'hours': format_decimal_for_input(entry.hours_worked),
         'drive_time': format_decimal_for_input(entry.drive_time),
         'mileage': format_decimal_for_input(entry.mileage),
@@ -246,9 +262,6 @@ def get_admin_access_context(user):
 
 def build_timesheet_context(
     *,
-    jobs,
-    workcodes,
-    non_job_codes,
     selected_date,
     hour_options,
     drive_time_options,
@@ -268,9 +281,6 @@ def build_timesheet_context(
     next_index = max((int(row['index']) for row in form_rows), default=1) + 1
 
     return {
-        'jobs': jobs,
-        'workcodes': workcodes,
-        'non_job_codes': non_job_codes,
         'selected_date': selected_date,
         'hour_options': hour_options,
         'drive_time_options': drive_time_options,
@@ -316,6 +326,24 @@ def build_export_response(entries, filename):
     return response
 
 
+def get_lookup_query(request, min_length):
+    query = (request.GET.get('q') or '').strip()
+    if len(query) < min_length:
+        return ''
+    return query
+
+
+def get_work_code_lookup_results(query, *, requires_job):
+    workcodes = WorkCode.objects.filter(
+        is_active=True,
+        requires_job=requires_job,
+    ).filter(
+        Q(code__icontains=query) | Q(description__icontains=query)
+    ).order_by('code')[:LOOKUP_RESULT_LIMIT]
+    return [{'label': format_work_code_label(work_code)} for work_code in workcodes]
+
+
+@never_cache
 @login_required
 def add_customer(request):
     if request.method == 'POST':
@@ -329,25 +357,85 @@ def add_customer(request):
     return render(request, 'core/add_customer.html', {'form': form})
 
 
+@never_cache
+@login_required
+def search_jobs(request):
+    query = get_lookup_query(request, min_length=2)
+    if not query:
+        return JsonResponse({'results': []})
+
+    jobs = Job.objects.filter(
+        Q(job_number__icontains=query) |
+        Q(job_name__icontains=query) |
+        Q(street_address__icontains=query) |
+        Q(city__icontains=query)
+    ).order_by('job_number')[:LOOKUP_RESULT_LIMIT]
+
+    return JsonResponse({
+        'results': [{'label': format_job_label(job)} for job in jobs],
+    })
+
+
+@never_cache
+@login_required
+def search_work_codes(request):
+    query = get_lookup_query(request, min_length=1)
+    if not query:
+        return JsonResponse({'results': []})
+
+    return JsonResponse({
+        'results': get_work_code_lookup_results(query, requires_job=True),
+    })
+
+
+@never_cache
+@login_required
+def search_non_job_codes(request):
+    query = get_lookup_query(request, min_length=1)
+    if not query:
+        return JsonResponse({'results': []})
+
+    return JsonResponse({
+        'results': get_work_code_lookup_results(query, requires_job=False),
+    })
+
+
+@never_cache
+@login_required
+@user_passes_test(is_authorized, login_url='/')
+def search_employees(request):
+    query = get_lookup_query(request, min_length=2)
+    if not query:
+        return JsonResponse({'results': []})
+
+    employees = Employee.objects.select_related('user').filter(
+        Q(user__username__icontains=query) |
+        Q(user__first_name__icontains=query) |
+        Q(user__last_name__icontains=query)
+    ).order_by('user__last_name', 'user__first_name', 'user__username')[:LOOKUP_RESULT_LIMIT]
+
+    return JsonResponse({
+        'results': [
+            {'label': format_employee_label(employee), 'value': str(employee.id)}
+            for employee in employees
+        ],
+    })
+
+
+@never_cache
 @login_required
 @user_passes_test(is_authorized, login_url='/')
 def reports(request):
-    employees = Employee.objects.select_related('user').order_by(
-        'user__last_name', 'user__first_name', 'user__username'
-    )
     today = date.today().isoformat()
     return render(request, 'core/reports.html', {
-        'employees': employees,
         'today': today,
         **get_admin_access_context(request.user),
     })
 
 
+@never_cache
 @login_required
 def timesheet(request):
-    jobs = Job.objects.all().order_by('job_number')
-    workcodes = WorkCode.objects.filter(is_active=True, requires_job=True).order_by('code')
-    non_job_codes = WorkCode.objects.filter(is_active=True, requires_job=False).order_by('code')
     hour_options = ["0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2", "3", "4", "5", "6", "7", "8"]
     drive_time_options = ["0", "0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"]
 
@@ -377,9 +465,6 @@ def timesheet(request):
             if errors:
                 entries, total_hours, total_miles = get_timesheet_entries(employee, work_date_obj)
                 context = build_timesheet_context(
-                    jobs=jobs,
-                    workcodes=workcodes,
-                    non_job_codes=non_job_codes,
                     selected_date=work_date_obj.isoformat(),
                     hour_options=hour_options,
                     drive_time_options=drive_time_options,
@@ -422,9 +507,6 @@ def timesheet(request):
                 form_rows = [build_form_row('1', get_empty_form_values())]
             entries, total_hours, total_miles = get_timesheet_entries(employee, work_date_obj)
             context = build_timesheet_context(
-                jobs=jobs,
-                workcodes=workcodes,
-                non_job_codes=non_job_codes,
                 selected_date=work_date_obj.isoformat(),
                 hour_options=hour_options,
                 drive_time_options=drive_time_options,
@@ -447,9 +529,6 @@ def timesheet(request):
 
     entries, total_hours, total_miles = get_timesheet_entries(employee, selected_date_obj)
     context = build_timesheet_context(
-        jobs=jobs,
-        workcodes=workcodes,
-        non_job_codes=non_job_codes,
         selected_date=selected_date,
         hour_options=hour_options,
         drive_time_options=drive_time_options,
@@ -461,6 +540,7 @@ def timesheet(request):
     return render(request, 'core/timesheet.html', context)
 
 
+@never_cache
 @login_required
 @require_POST
 def delete_entry(request, entry_id):
@@ -474,6 +554,7 @@ def delete_entry(request, entry_id):
     return redirect(f'/timesheet/?date={date_str}')
 
 
+@never_cache
 @login_required
 def export_timesheet(request):
     work_date = parse_work_date(request.GET.get('date'))
@@ -487,6 +568,7 @@ def export_timesheet(request):
     return build_export_response(entries, f'timesheet-{work_date.isoformat()}.csv')
 
 
+@never_cache
 @login_required
 @user_passes_test(is_authorized, login_url='/')
 def export_jobs_list(request):

@@ -86,6 +86,14 @@ class TimesheetViewTests(TestCase):
         self.assertNotContains(response, 'Admin Login')
         self.assertNotContains(response, 'Admin Page')
 
+    def test_timesheet_page_source_does_not_embed_lookup_values(self):
+        response = self.client.get(reverse('timesheet'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'JOB-100 | Test Job | 123 Main')
+        self.assertNotContains(response, '100 - Install')
+        self.assertNotContains(response, 'SM - Safety Meeting')
+
     def test_edit_mode_prefills_saved_entry(self):
         employee = Employee.objects.create(user=self.user)
         entry = TimeEntry.objects.create(
@@ -171,7 +179,9 @@ class TimesheetViewTests(TestCase):
         response = self.client.get(reverse('timesheet'), {'date': '2026-04-16'})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'JOB-100 | Test Job | 123 Main')
+        self.assertContains(response, 'JOB-100')
+        self.assertContains(response, 'Test Job')
+        self.assertContains(response, '123 Main')
         self.assertContains(response, '100 - Install')
         self.assertContains(response, 'SM - Safety Meeting')
 
@@ -222,6 +232,34 @@ class TimesheetViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Or')
 
+    def test_job_lookup_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse('search_jobs'), {'q': 'JOB'})
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_job_lookup_returns_filtered_matches(self):
+        response = self.client.get(reverse('search_jobs'), {'q': 'JOB-100'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['results'], [
+            {'label': 'JOB-100 | Test Job | 123 Main'},
+        ])
+
+    def test_work_code_lookups_return_filtered_matches(self):
+        job_code_response = self.client.get(reverse('search_work_codes'), {'q': '100'})
+        non_job_code_response = self.client.get(reverse('search_non_job_codes'), {'q': 'SM'})
+
+        self.assertEqual(job_code_response.status_code, 200)
+        self.assertEqual(job_code_response.json()['results'], [
+            {'label': '100 - Install'},
+        ])
+        self.assertEqual(non_job_code_response.status_code, 200)
+        self.assertEqual(non_job_code_response.json()['results'], [
+            {'label': 'SM - Safety Meeting'},
+        ])
+
     def test_delete_requires_post(self):
         employee = Employee.objects.create(user=self.user)
         entry = TimeEntry.objects.create(
@@ -263,6 +301,40 @@ class ReportsAccessTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='worker2', password='testpass123')
         self.authorized_group = Group.objects.create(name='Authorized')
+        self.report_user = User.objects.create_user(
+            username='employee99',
+            password='testpass123',
+            first_name='Alicia',
+            last_name='Example',
+        )
+        self.report_employee = Employee.objects.create(user=self.report_user)
+
+    def test_timesheet_hides_reports_link_for_unauthorized_user(self):
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('timesheet'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('reports'))
+
+    def test_timesheet_shows_reports_link_for_authorized_group(self):
+        self.user.groups.add(self.authorized_group)
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('timesheet'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('reports'))
+
+    def test_timesheet_shows_reports_link_for_staff_user(self):
+        self.user.is_staff = True
+        self.user.save()
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('timesheet'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('reports'))
 
     def test_reports_requires_authorized_user(self):
         self.client.login(username='worker2', password='testpass123')
@@ -284,6 +356,16 @@ class ReportsAccessTests(TestCase):
         self.assertContains(response, 'Admin Login')
         self.assertContains(response, reverse('admin:login'))
 
+    def test_reports_page_source_does_not_embed_employee_list(self):
+        self.user.groups.add(self.authorized_group)
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('reports'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Alicia Example (employee99)')
+        self.assertNotContains(response, 'employee99')
+
     def test_reports_shows_admin_page_button_for_staff_user(self):
         self.user.is_staff = True
         self.user.save()
@@ -295,6 +377,24 @@ class ReportsAccessTests(TestCase):
         self.assertContains(response, 'Admin Page')
         self.assertContains(response, reverse('admin:index'))
         self.assertNotContains(response, 'Admin Login')
+
+    def test_employee_lookup_requires_authorized_user(self):
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('search_employees'), {'q': 'Ali'})
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_employee_lookup_returns_filtered_matches_for_authorized_user(self):
+        self.user.groups.add(self.authorized_group)
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('search_employees'), {'q': 'Ali'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['results'], [
+            {'label': 'Alicia Example (employee99)', 'value': str(self.report_employee.id)},
+        ])
 
 
 class ReportsExportTests(TestCase):

@@ -15,25 +15,25 @@
 
 <div class="card">
     <h3>Single Day Export</h3>
-    <form method="get" action="{% url 'export_jobs_list' %}">
+    <form method="get" action="{% url 'export_jobs_list' %}" class="employee-export-form">
         <input type="hidden" name="export_type" value="single">
 
         <label>Work Date:</label>
         <input type="date" name="date" value="{{ today }}">
 
         <label>Employee:</label>
-        <select name="employee">
-            <option value="all">All Employees</option>
-            {% for employee in employees %}
-            <option value="{{ employee.id }}">
-                {% if employee.user.first_name or employee.user.last_name %}
-                {{ employee.user.first_name }} {{ employee.user.last_name }} ({{ employee.user.username }})
-                {% else %}
-                {{ employee.user.username }}
-                {% endif %}
-            </option>
-            {% endfor %}
-        </select>
+        <input type="hidden" name="employee" value="all" class="employee-id-input">
+        <div class="dropdown-wrapper employee-picker">
+            <input
+                type="text"
+                class="employee-search-input"
+                autocomplete="off"
+                placeholder="Leave blank for all employees"
+                data-search-url="{% url 'search_employees' %}"
+                data-min-chars="2"
+            >
+            <div class="dropdown-list employee-dropdown"></div>
+        </div>
 
         <div class="button-row">
             <button type="submit">Export CSV</button>
@@ -43,7 +43,7 @@
 
 <div class="card">
     <h3>Date Range Export</h3>
-    <form method="get" action="{% url 'export_jobs_list' %}">
+    <form method="get" action="{% url 'export_jobs_list' %}" class="employee-export-form">
         <input type="hidden" name="export_type" value="range">
 
         <label>Start Date:</label>
@@ -53,22 +53,162 @@
         <input type="date" name="end_date" value="{{ today }}">
 
         <label>Employee:</label>
-        <select name="employee">
-            <option value="all">All Employees</option>
-            {% for employee in employees %}
-            <option value="{{ employee.id }}">
-                {% if employee.user.first_name or employee.user.last_name %}
-                {{ employee.user.first_name }} {{ employee.user.last_name }} ({{ employee.user.username }})
-                {% else %}
-                {{ employee.user.username }}
-                {% endif %}
-            </option>
-            {% endfor %}
-        </select>
+        <input type="hidden" name="employee" value="all" class="employee-id-input">
+        <div class="dropdown-wrapper employee-picker">
+            <input
+                type="text"
+                class="employee-search-input"
+                autocomplete="off"
+                placeholder="Leave blank for all employees"
+                data-search-url="{% url 'search_employees' %}"
+                data-min-chars="2"
+            >
+            <div class="dropdown-list employee-dropdown"></div>
+        </div>
 
         <div class="button-row">
             <button type="submit">Export CSV</button>
         </div>
     </form>
 </div>
+
+<script>
+function showEmployeeMessage(dropdown, message) {
+    dropdown.innerHTML = '';
+    const item = document.createElement('div');
+    item.className = 'dropdown-item is-static';
+    item.textContent = message;
+    dropdown.appendChild(item);
+    dropdown.style.display = 'block';
+}
+
+function renderEmployeeResults(input, hiddenInput, dropdown, results) {
+    dropdown.innerHTML = '';
+
+    if (!results.length) {
+        showEmployeeMessage(dropdown, 'No matches found.');
+        return;
+    }
+
+    results.forEach(result => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = result.label;
+        item.addEventListener('mousedown', event => {
+            event.preventDefault();
+            input.value = result.label;
+            hiddenInput.value = result.value;
+            dropdown.style.display = 'none';
+        });
+        dropdown.appendChild(item);
+    });
+
+    dropdown.style.display = 'block';
+}
+
+function requestEmployeeResults(input, hiddenInput, dropdown) {
+    const query = input.value.trim();
+    const minChars = Number(input.dataset.minChars || 2);
+
+    if (!query) {
+        hiddenInput.value = 'all';
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    hiddenInput.value = '';
+
+    if (query.length < minChars) {
+        showEmployeeMessage(dropdown, 'Type at least 2 characters to search employees.');
+        return;
+    }
+
+    const requestId = String(Number(input.dataset.requestId || '0') + 1);
+    input.dataset.requestId = requestId;
+    showEmployeeMessage(dropdown, 'Searching...');
+
+    const searchUrl = new URL(input.dataset.searchUrl, window.location.origin);
+    searchUrl.searchParams.set('q', query);
+
+    fetch(searchUrl, {
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Lookup request failed.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (input.dataset.requestId !== requestId) {
+                return;
+            }
+            renderEmployeeResults(input, hiddenInput, dropdown, data.results || []);
+        })
+        .catch(() => {
+            if (input.dataset.requestId !== requestId) {
+                return;
+            }
+            showEmployeeMessage(dropdown, 'Unable to load results.');
+        });
+}
+
+function scheduleEmployeeLookup(input, hiddenInput, dropdown) {
+    window.clearTimeout(Number(input.dataset.lookupTimer || '0'));
+    const timerId = window.setTimeout(() => requestEmployeeResults(input, hiddenInput, dropdown), 180);
+    input.dataset.lookupTimer = String(timerId);
+}
+
+function bindEmployeePicker(form) {
+    if (form.dataset.employeePickerBound === 'true') {
+        return;
+    }
+
+    const input = form.querySelector('.employee-search-input');
+    const hiddenInput = form.querySelector('.employee-id-input');
+    const dropdown = form.querySelector('.employee-dropdown');
+    if (!input || !hiddenInput || !dropdown) {
+        return;
+    }
+
+    form.dataset.employeePickerBound = 'true';
+
+    input.addEventListener('focus', () => {
+        requestEmployeeResults(input, hiddenInput, dropdown);
+    });
+
+    input.addEventListener('input', () => {
+        scheduleEmployeeLookup(input, hiddenInput, dropdown);
+    });
+
+    form.addEventListener('submit', event => {
+        if (!input.value.trim()) {
+            hiddenInput.value = 'all';
+            return;
+        }
+
+        if (!hiddenInput.value) {
+            event.preventDefault();
+            alert('Select an employee from the list, or leave Employee blank for All Employees.');
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.employee-export-form').forEach(bindEmployeePicker);
+    document.addEventListener('click', event => {
+        document.querySelectorAll('.employee-picker').forEach(wrapper => {
+            if (!wrapper.contains(event.target)) {
+                const dropdown = wrapper.querySelector('.dropdown-list');
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

@@ -4,6 +4,10 @@ from . import views
 urlpatterns = [
     path('', views.timesheet, name='home'),
     path('add/', views.add_customer, name='add_customer'),
+    path('lookup/jobs/', views.search_jobs, name='search_jobs'),
+    path('lookup/work-codes/', views.search_work_codes, name='search_work_codes'),
+    path('lookup/non-job-codes/', views.search_non_job_codes, name='search_non_job_codes'),
+    path('lookup/employees/', views.search_employees, name='search_employees'),
     path('reports/', views.reports, name='reports'),
     path('reports/export-jobs-list/', views.export_jobs_list, name='export_jobs_list'),
     path('timesheet/', views.timesheet, name='timesheet'),

@@ -88,24 +88,34 @@
                 <div>
                     <label>Job Number:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="job_{{ row.index }}" class="job-input" autocomplete="off" value="{{ row.values.job }}">
-                        <div class="dropdown-list job-dropdown">
-                            {% for job in jobs %}
-                            <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
-                            {% endfor %}
-                        </div>
+                        <input
+                            type="text"
+                            name="job_{{ row.index }}"
+                            class="job-input remote-lookup-input"
+                            autocomplete="off"
+                            value="{{ row.values.job }}"
+                            data-search-url="{% url 'search_jobs' %}"
+                            data-min-chars="2"
+                            data-empty-message="Type at least 2 characters to search jobs."
+                        >
+                        <div class="dropdown-list job-dropdown"></div>
                     </div>
                 </div>
 
                 <div>
                     <label>Work Code:</label>
                     <div class="dropdown-wrapper">
-                        <input type="text" name="work_code_{{ row.index }}" class="workcode-input" autocomplete="off" value="{{ row.values.work_code }}">
-                        <div class="dropdown-list workcode-dropdown">
-                            {% for wc in workcodes %}
-                            <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
-                            {% endfor %}
-                        </div>
+                        <input
+                            type="text"
+                            name="work_code_{{ row.index }}"
+                            class="workcode-input remote-lookup-input"
+                            autocomplete="off"
+                            value="{{ row.values.work_code }}"
+                            data-search-url="{% url 'search_work_codes' %}"
+                            data-min-chars="1"
+                            data-empty-message="Type at least 1 character to search work codes."
+                        >
+                        <div class="dropdown-list workcode-dropdown"></div>
                     </div>
                 </div>
 
@@ -113,12 +123,19 @@
 
                 <div>
                     <label>Non Job Code:</label>
-                    <select name="non_job_code_{{ row.index }}">
-                        <option value="">Select</option>
-                        {% for wc in non_job_codes %}
-                        <option value="{{ wc.code }}"{% if row.values.non_job_code == wc.code %} selected{% endif %}>{{ wc.code }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="dropdown-wrapper">
+                        <input
+                            type="text"
+                            name="non_job_code_{{ row.index }}"
+                            class="non-job-code-input remote-lookup-input"
+                            autocomplete="off"
+                            value="{{ row.values.non_job_code }}"
+                            data-search-url="{% url 'search_non_job_codes' %}"
+                            data-min-chars="1"
+                            data-empty-message="Type at least 1 character to search non-job codes."
+                        >
+                        <div class="dropdown-list non-job-code-dropdown"></div>
+                    </div>
                 </div>
 
                 <div>
@@ -174,24 +191,32 @@
             <div>
                 <label>Job Number:</label>
                 <div class="dropdown-wrapper">
-                    <input type="text" name="job___prefix__" class="job-input" autocomplete="off">
-                    <div class="dropdown-list job-dropdown">
-                        {% for job in jobs %}
-                        <div class="dropdown-item">{{ job.job_number }} | {{ job.job_name }} | {{ job.street_address }}</div>
-                        {% endfor %}
-                    </div>
+                    <input
+                        type="text"
+                        name="job___prefix__"
+                        class="job-input remote-lookup-input"
+                        autocomplete="off"
+                        data-search-url="{% url 'search_jobs' %}"
+                        data-min-chars="2"
+                        data-empty-message="Type at least 2 characters to search jobs."
+                    >
+                    <div class="dropdown-list job-dropdown"></div>
                 </div>
             </div>
 
             <div>
                 <label>Work Code:</label>
                 <div class="dropdown-wrapper">
-                    <input type="text" name="work_code___prefix__" class="workcode-input" autocomplete="off">
-                    <div class="dropdown-list workcode-dropdown">
-                        {% for wc in workcodes %}
-                        <div class="dropdown-item">{{ wc.code }} - {{ wc.description }}</div>
-                        {% endfor %}
-                    </div>
+                    <input
+                        type="text"
+                        name="work_code___prefix__"
+                        class="workcode-input remote-lookup-input"
+                        autocomplete="off"
+                        data-search-url="{% url 'search_work_codes' %}"
+                        data-min-chars="1"
+                        data-empty-message="Type at least 1 character to search work codes."
+                    >
+                    <div class="dropdown-list workcode-dropdown"></div>
                 </div>
             </div>
 
@@ -199,12 +224,18 @@
 
             <div>
                 <label>Non Job Code:</label>
-                <select name="non_job_code___prefix__">
-                    <option value="">Select</option>
-                    {% for wc in non_job_codes %}
-                    <option value="{{ wc.code }}">{{ wc.code }}</option>
-                    {% endfor %}
-                </select>
+                <div class="dropdown-wrapper">
+                    <input
+                        type="text"
+                        name="non_job_code___prefix__"
+                        class="non-job-code-input remote-lookup-input"
+                        autocomplete="off"
+                        data-search-url="{% url 'search_non_job_codes' %}"
+                        data-min-chars="1"
+                        data-empty-message="Type at least 1 character to search non-job codes."
+                    >
+                    <div class="dropdown-list non-job-code-dropdown"></div>
+                </div>
             </div>
 
             <div>
@@ -243,6 +274,97 @@
 <script>
 let nextIndex = {{ next_index }};
 
+function showDropdownMessage(dropdown, message) {
+    dropdown.innerHTML = '';
+    const item = document.createElement('div');
+    item.className = 'dropdown-item is-static';
+    item.textContent = message;
+    dropdown.appendChild(item);
+    dropdown.style.display = 'block';
+}
+
+function renderDropdownResults(input, results) {
+    const dropdown = input.parentElement.querySelector('.dropdown-list');
+    if (!dropdown) {
+        return;
+    }
+
+    dropdown.innerHTML = '';
+
+    if (!results.length) {
+        showDropdownMessage(dropdown, 'No matches found.');
+        return;
+    }
+
+    results.forEach(result => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = result.label;
+        item.addEventListener('mousedown', event => {
+            event.preventDefault();
+            input.value = result.label;
+            dropdown.style.display = 'none';
+        });
+        dropdown.appendChild(item);
+    });
+
+    dropdown.style.display = 'block';
+}
+
+function requestDropdownResults(input) {
+    const dropdown = input.parentElement.querySelector('.dropdown-list');
+    if (!dropdown) {
+        return;
+    }
+
+    const query = input.value.trim();
+    const minChars = Number(input.dataset.minChars || 1);
+    const emptyMessage = input.dataset.emptyMessage || 'Type to search.';
+
+    if (query.length < minChars) {
+        showDropdownMessage(dropdown, emptyMessage);
+        return;
+    }
+
+    const requestId = String(Number(input.dataset.requestId || '0') + 1);
+    input.dataset.requestId = requestId;
+    showDropdownMessage(dropdown, 'Searching...');
+
+    const searchUrl = new URL(input.dataset.searchUrl, window.location.origin);
+    searchUrl.searchParams.set('q', query);
+
+    fetch(searchUrl, {
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Lookup request failed.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (input.dataset.requestId !== requestId) {
+                return;
+            }
+            renderDropdownResults(input, data.results || []);
+        })
+        .catch(() => {
+            if (input.dataset.requestId !== requestId) {
+                return;
+            }
+            showDropdownMessage(dropdown, 'Unable to load results.');
+        });
+}
+
+function scheduleDropdownRequest(input) {
+    window.clearTimeout(Number(input.dataset.lookupTimer || '0'));
+    const timerId = window.setTimeout(() => requestDropdownResults(input), 180);
+    input.dataset.lookupTimer = String(timerId);
+}
+
 function setupDropdown(input) {
     if (input.dataset.dropdownBound === 'true') {
         return;
@@ -256,21 +378,11 @@ function setupDropdown(input) {
     input.dataset.dropdownBound = 'true';
 
     input.addEventListener('focus', () => {
-        dropdown.style.display = 'block';
+        requestDropdownResults(input);
     });
 
     input.addEventListener('input', () => {
-        const value = input.value.toLowerCase();
-        dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-            item.style.display = item.innerText.toLowerCase().includes(value) ? 'block' : 'none';
-        });
-    });
-
-    dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-        item.addEventListener('click', () => {
-            input.value = item.innerText.trim();
-            dropdown.style.display = 'none';
-        });
+        scheduleDropdownRequest(input);
     });
 }
 
@@ -285,7 +397,7 @@ function updateTotals() {
 }
 
 function bindRow(block) {
-    block.querySelectorAll('.job-input, .workcode-input').forEach(setupDropdown);
+    block.querySelectorAll('.remote-lookup-input').forEach(setupDropdown);
     block.querySelectorAll('.hours-input, .mileage-input').forEach(element => {
         element.addEventListener('input', updateTotals);
         element.addEventListener('change', updateTotals);

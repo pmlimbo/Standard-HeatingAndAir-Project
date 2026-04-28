@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    {% load static %}
+    {% load static core_permissions %}
     <meta charset="utf-8">
     <title>Employee Timesheet</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -167,6 +167,15 @@
             background: var(--surface-alt);
         }
 
+        .dropdown-item.is-static {
+            cursor: default;
+            color: var(--muted);
+        }
+
+        .dropdown-item.is-static:hover {
+            background: white;
+        }
+
         .entry-row {
             display: grid;
             gap: 12px;
@@ -229,7 +238,9 @@
     {% if user.is_authenticated %}
     <div class="nav">
         <a href="{% url 'timesheet' %}">Timesheet</a>
+        {% if user|can_access_reports %}
         <a href="{% url 'reports' %}">Reports</a>
+        {% endif %}
         <form action="/accounts/logout/" method="post" class="inline-form">
             {% csrf_token %}
             <button type="submit">Logout</button>

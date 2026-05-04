@@ -18,5 +18,19 @@ python manage.py shell
 from core.import_employees import run
 run()
 
+
+#TO IMPORT WORK CODES  ==========================
+python manage.py shell
+
+from core.import_work_codes import run
+run()
+
+
+#TO IMPORT NON JOB CODES  ==========================
+python manage.py shell
+
+from core.import_non_job_codes import run
+run()
+
 from django.contrib.auth.models import User
 User.objects.update(is_staff=True)

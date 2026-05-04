@@ -16,6 +16,9 @@
                 Non-job entry
             {% endif %}
         </strong>
+        {% if entry.job and entry.job.status_label %}
+        <span class="status-pill {{ entry.job.status_tone }}" style="margin-left:8px;">{{ entry.job.status_label }}</span>
+        {% endif %}
         | {{ entry.work_code.code }}{% if entry.work_code.description %} - {{ entry.work_code.description }}{% endif %}
         | {{ entry.hours_worked }} hrs
         | {{ entry.drive_time }} drive
@@ -85,7 +88,7 @@
             {% endif %}
 
             <div class="entry-row">
-                <div>
+                <div class="job-field">
                     <label>Job Number:</label>
                     <div class="dropdown-wrapper">
                         <input
@@ -99,6 +102,13 @@
                             data-empty-message="Type at least 2 characters to search jobs."
                         >
                         <div class="dropdown-list job-dropdown"></div>
+                    </div>
+                    <div class="job-status-display{% if row.job_status %} is-visible{% endif %}">
+                        <span class="muted">Job Status:</span>
+                        <span
+                            class="status-pill{% if row.job_status %} {{ row.job_status.tone }}{% endif %}"
+                            {% if not row.job_status %}style="display:none;"{% endif %}
+                        >{% if row.job_status %}{{ row.job_status.label }}{% endif %}</span>
                     </div>
                 </div>
 
@@ -188,7 +198,7 @@
     <div class="card job-block" data-index="__prefix__">
         <h3>Entry __prefix__</h3>
         <div class="entry-row">
-            <div>
+            <div class="job-field">
                 <label>Job Number:</label>
                 <div class="dropdown-wrapper">
                     <input
@@ -201,6 +211,10 @@
                         data-empty-message="Type at least 2 characters to search jobs."
                     >
                     <div class="dropdown-list job-dropdown"></div>
+                </div>
+                <div class="job-status-display">
+                    <span class="muted">Job Status:</span>
+                    <span class="status-pill" style="display:none;"></span>
                 </div>
             </div>
 
@@ -299,10 +313,31 @@ function renderDropdownResults(input, results) {
     results.forEach(result => {
         const item = document.createElement('div');
         item.className = 'dropdown-item';
-        item.textContent = result.label;
+
+        if (result.status_label) {
+            const content = document.createElement('div');
+            content.className = 'dropdown-item-content';
+
+            const label = document.createElement('span');
+            label.textContent = result.label;
+            content.appendChild(label);
+
+            const badge = document.createElement('span');
+            badge.className = `status-pill ${result.status_tone || 'warning'}`;
+            badge.textContent = result.status_label;
+            content.appendChild(badge);
+
+            item.appendChild(content);
+        } else {
+            item.textContent = result.label;
+        }
+
         item.addEventListener('mousedown', event => {
             event.preventDefault();
             input.value = result.label;
+            if (input.classList.contains('job-input')) {
+                updateJobStatusDisplay(input, result.status_label || '', result.status_tone || '');
+            }
             dropdown.style.display = 'none';
         });
         dropdown.appendChild(item);
@@ -365,6 +400,32 @@ function scheduleDropdownRequest(input) {
     input.dataset.lookupTimer = String(timerId);
 }
 
+function updateJobStatusDisplay(input, statusLabel, statusTone) {
+    const field = input.closest('.job-field');
+    if (!field) {
+        return;
+    }
+
+    const display = field.querySelector('.job-status-display');
+    const pill = display ? display.querySelector('.status-pill') : null;
+    if (!display || !pill) {
+        return;
+    }
+
+    if (!statusLabel) {
+        display.classList.remove('is-visible');
+        pill.textContent = '';
+        pill.className = 'status-pill';
+        pill.style.display = 'none';
+        return;
+    }
+
+    display.classList.add('is-visible');
+    pill.textContent = statusLabel;
+    pill.className = `status-pill ${statusTone || 'warning'}`;
+    pill.style.display = 'inline-flex';
+}
+
 function setupDropdown(input) {
     if (input.dataset.dropdownBound === 'true') {
         return;
@@ -382,6 +443,9 @@ function setupDropdown(input) {
     });
 
     input.addEventListener('input', () => {
+        if (input.classList.contains('job-input')) {
+            updateJobStatusDisplay(input, '', '');
+        }
         scheduleDropdownRequest(input);
     });
 }

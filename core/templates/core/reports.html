@@ -72,6 +72,53 @@
     </form>
 </div>
 
+<div class="card">
+    <h3>Timesheet Info</h3>
+    <p class="muted">Download current reference data or upload a replacement CSV for each dataset.</p>
+
+    <div class="reference-data-list">
+        {% for item in reference_data_items %}
+        <div class="reference-data-row">
+            <div>
+                <strong>{{ item.label }}</strong>
+                <div class="muted reference-data-meta">
+                    {% if item.last_uploaded_display %}
+                        Last uploaded {{ item.last_uploaded_display }}
+                        {% if item.last_uploaded_filename %}
+                            from {{ item.last_uploaded_filename }}
+                        {% endif %}
+                    {% else %}
+                        Never uploaded yet.
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="reference-data-actions">
+                <a href="{% url 'download_reference_data' item.key %}">{{ item.download_label }}</a>
+
+                <form method="post" action="{% url 'upload_reference_data' item.key %}" enctype="multipart/form-data" class="reference-data-form" data-dataset-label="{{ item.label }}">
+                    {% csrf_token %}
+                    <input type="file" name="csv_file" accept=".csv,text/csv" required>
+
+                    <div class="button-row">
+                        <button type="submit">{{ item.upload_label }}</button>
+                    </div>
+
+                    <div class="upload-progress" aria-live="polite">
+                        <div class="upload-progress-label">Waiting to upload...</div>
+                        <div class="upload-progress-track">
+                            <div class="upload-progress-bar"></div>
+                        </div>
+                    </div>
+
+                    <div class="upload-status muted" aria-live="polite"></div>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
 <script>
 function showEmployeeMessage(dropdown, message) {
     dropdown.innerHTML = '';
@@ -197,8 +244,193 @@ function bindEmployeePicker(form) {
     });
 }
 
+function setUploadStatus(form, message, tone) {
+    const status = form.querySelector('.upload-status');
+    if (!status) {
+        return;
+    }
+
+    status.textContent = message || '';
+    status.className = `upload-status muted${tone ? ` ${tone}` : ''}`;
+}
+
+function setUploadProgress(form, percent, label) {
+    const wrapper = form.querySelector('.upload-progress');
+    const bar = form.querySelector('.upload-progress-bar');
+    const text = form.querySelector('.upload-progress-label');
+    if (!wrapper || !bar || !text) {
+        return;
+    }
+
+    wrapper.classList.add('is-active');
+    const boundedPercent = Math.max(0, Math.min(percent, 100));
+    form.dataset.currentPercent = String(boundedPercent);
+    bar.style.width = `${boundedPercent}%`;
+    text.textContent = label;
+}
+
+function clearUploadSimulation(form) {
+    const timerId = Number(form.dataset.progressTimer || '0');
+    if (timerId) {
+        window.clearTimeout(timerId);
+    }
+    form.dataset.progressTimer = '';
+}
+
+function getProgressLabel(form, percent) {
+    const phase = form.dataset.uploadComplete === 'true'
+        ? 'Importing data...'
+        : 'Uploading file...';
+    return `${phase} ${percent}%`;
+}
+
+function scheduleUploadSimulation(form) {
+    clearUploadSimulation(form);
+
+    const tick = () => {
+        const current = Number(form.dataset.currentPercent || '0');
+        if (current >= 95) {
+            form.dataset.progressTimer = '';
+            return;
+        }
+
+        let increment = 1;
+        const nextPercent = Math.min(95, current + increment);
+        setUploadProgress(form, nextPercent, getProgressLabel(form, nextPercent));
+
+        const delay = nextPercent < 20 ? 1200 : nextPercent < 60 ? 2000 : nextPercent < 85 ? 3000 : 5000;
+        form.dataset.progressTimer = String(window.setTimeout(tick, delay));
+    };
+
+    form.dataset.progressTimer = String(window.setTimeout(tick, 900));
+}
+
+function finishUploadProgress(form) {
+    clearUploadSimulation(form);
+    const wrapper = form.querySelector('.upload-progress');
+    if (!wrapper) {
+        return;
+    }
+
+    window.setTimeout(() => {
+        wrapper.classList.remove('is-active');
+    }, 1200);
+}
+
+function setUploadBusyState(form, isBusy) {
+    const fileInput = form.querySelector('input[type="file"]');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    if (fileInput) {
+        fileInput.disabled = isBusy;
+    }
+    if (submitButton) {
+        submitButton.disabled = isBusy;
+    }
+}
+
+function updateReferenceDataMeta(form, data) {
+    const row = form.closest('.reference-data-row');
+    if (!row) {
+        return;
+    }
+
+    const meta = row.querySelector('.reference-data-meta');
+    if (!meta) {
+        return;
+    }
+
+    if (data.last_uploaded_display) {
+        let text = `Last uploaded ${data.last_uploaded_display}`;
+        if (data.last_uploaded_filename) {
+            text += ` from ${data.last_uploaded_filename}`;
+        }
+        meta.textContent = text;
+    }
+}
+
+function bindReferenceDataUpload(form) {
+    if (form.dataset.uploadBound === 'true') {
+        return;
+    }
+
+    const fileInput = form.querySelector('input[type="file"]');
+    if (!fileInput) {
+        return;
+    }
+
+    form.dataset.uploadBound = 'true';
+
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+
+        if (!fileInput.files.length) {
+            setUploadStatus(form, `Choose a CSV file for ${form.dataset.datasetLabel || 'this upload'}.`, 'error');
+            return;
+        }
+
+        const formData = new FormData(form);
+        const xhr = new XMLHttpRequest();
+
+        setUploadBusyState(form, true);
+        setUploadStatus(form, '');
+        form.dataset.uploadComplete = 'false';
+        setUploadProgress(form, 0, 'Uploading file... 0%');
+        scheduleUploadSimulation(form);
+
+        xhr.open('POST', form.action);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.upload.addEventListener('progress', progressEvent => {
+            if (!progressEvent.lengthComputable) {
+                return;
+            }
+
+            if (progressEvent.loaded >= progressEvent.total) {
+                form.dataset.uploadComplete = 'true';
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            setUploadBusyState(form, false);
+            form.dataset.uploadComplete = 'true';
+
+            let data = {};
+            try {
+                data = JSON.parse(xhr.responseText || '{}');
+            } catch (error) {
+                data = {};
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+                setUploadProgress(form, 100, 'Upload complete.');
+                updateReferenceDataMeta(form, data);
+                setUploadStatus(form, data.message || 'Upload complete.', 'success');
+                form.reset();
+                finishUploadProgress(form);
+                return;
+            }
+
+            setUploadProgress(form, 100, 'Upload failed.');
+            setUploadStatus(form, data.message || 'Upload failed.', 'error');
+            finishUploadProgress(form);
+        });
+
+        xhr.addEventListener('error', () => {
+            setUploadBusyState(form, false);
+            form.dataset.uploadComplete = 'true';
+            setUploadProgress(form, 100, 'Upload failed.');
+            setUploadStatus(form, 'Upload failed. Check your connection and try again.', 'error');
+            finishUploadProgress(form);
+        });
+
+        xhr.send(formData);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.employee-export-form').forEach(bindEmployeePicker);
+    document.querySelectorAll('.reference-data-form').forEach(bindReferenceDataUpload);
     document.addEventListener('click', event => {
         document.querySelectorAll('.employee-picker').forEach(wrapper => {
             if (!wrapper.contains(event.target)) {

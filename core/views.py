@@ -3,9 +3,10 @@ from urllib.parse import urlencode
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
@@ -13,6 +14,15 @@ from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm
 from .models import Employee, Job, TimeEntry, WorkCode
+from .reference_data import (
+    build_reference_data_export_response,
+    build_reference_data_items,
+    format_upload_timestamp,
+    get_reference_dataset,
+    import_reference_data,
+    record_reference_data_upload,
+    summarize_reference_data_import,
+)
 
 TIME_ENTRY_FIELD_PREFIXES = (
     'job_',
@@ -61,6 +71,31 @@ def format_job_label(job):
     return f"{job.job_number} | {job.job_name} | {job.street_address}"
 
 
+def get_job_status_data(job):
+    if not job or not job.status_label:
+        return None
+
+    return {
+        'code': job.normalized_status_code,
+        'label': job.status_label,
+        'tone': job.status_tone,
+    }
+
+
+def format_job_lookup_result(job):
+    result = {
+        'label': format_job_label(job),
+    }
+    status = get_job_status_data(job)
+    if status:
+        result.update({
+            'status_code': status['code'],
+            'status_label': status['label'],
+            'status_tone': status['tone'],
+        })
+    return result
+
+
 def format_work_code_label(work_code):
     return f"{work_code.code} - {work_code.description}"
 
@@ -74,6 +109,17 @@ def format_employee_label(employee):
 
 def extract_lookup_value(value, separator):
     return (value or '').partition(separator)[0].strip()
+
+
+def get_job_from_lookup_value(value):
+    if not value:
+        return None
+
+    job_number = extract_lookup_value(value, ' | ')
+    if not job_number:
+        return None
+
+    return Job.objects.filter(job_number=job_number).order_by('id').first()
 
 
 def get_entry_indices(data):
@@ -138,8 +184,7 @@ def validate_time_entry_values(values, *, force_validation=False):
 
     job = None
     if values['job']:
-        job_number = extract_lookup_value(values['job'], ' | ')
-        job = Job.objects.filter(job_number=job_number).first()
+        job = get_job_from_lookup_value(values['job'])
         if not job:
             errors.append('Select a valid Job Number.')
 
@@ -219,10 +264,14 @@ def get_form_values(entry=None):
 
 
 def build_form_row(index, values=None, errors=None, title=None):
+    values = values or get_empty_form_values()
+    job_status = get_job_status_data(get_job_from_lookup_value(values.get('job')))
+
     return {
         'index': str(index),
         'title': title or f'Entry {index}',
-        'values': values or get_empty_form_values(),
+        'values': values,
+        'job_status': job_status,
         'errors': errors or [],
     }
 
@@ -372,7 +421,7 @@ def search_jobs(request):
     ).order_by('job_number')[:LOOKUP_RESULT_LIMIT]
 
     return JsonResponse({
-        'results': [{'label': format_job_label(job)} for job in jobs],
+        'results': [format_job_lookup_result(job) for job in jobs],
     })
 
 
@@ -422,6 +471,17 @@ def search_employees(request):
     })
 
 
+def get_reference_dataset_or_404(dataset_key):
+    try:
+        return get_reference_dataset(dataset_key)
+    except ValueError as exc:
+        raise Http404(str(exc)) from exc
+
+
+def is_ajax_request(request):
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+
 @never_cache
 @login_required
 @user_passes_test(is_authorized, login_url='/')
@@ -429,8 +489,62 @@ def reports(request):
     today = date.today().isoformat()
     return render(request, 'core/reports.html', {
         'today': today,
+        'reference_data_items': build_reference_data_items(),
         **get_admin_access_context(request.user),
     })
+
+
+@never_cache
+@login_required
+@user_passes_test(is_authorized, login_url='/')
+def download_reference_data(request, dataset_key):
+    get_reference_dataset_or_404(dataset_key)
+    return build_reference_data_export_response(dataset_key)
+
+
+@never_cache
+@login_required
+@user_passes_test(is_authorized, login_url='/')
+@require_POST
+def upload_reference_data(request, dataset_key):
+    dataset = get_reference_dataset_or_404(dataset_key)
+    uploaded_file = request.FILES.get('csv_file')
+    ajax_request = is_ajax_request(request)
+
+    if not uploaded_file:
+        error_message = f"Choose a CSV file to upload for {dataset['label']}."
+        if ajax_request:
+            return JsonResponse({'ok': False, 'message': error_message}, status=400)
+        messages.error(request, error_message)
+        return redirect('reports')
+
+    try:
+        result = import_reference_data(dataset_key, uploaded_file)
+        upload_status = record_reference_data_upload(dataset_key, getattr(uploaded_file, 'name', ''))
+    except UnicodeDecodeError:
+        error_message = f"{dataset['label']} upload failed: the file must be UTF-8 CSV text."
+        if ajax_request:
+            return JsonResponse({'ok': False, 'message': error_message}, status=400)
+        messages.error(request, error_message)
+        return redirect('reports')
+    except ValueError as exc:
+        error_message = f"{dataset['label']} upload failed: {exc}"
+        if ajax_request:
+            return JsonResponse({'ok': False, 'message': error_message}, status=400)
+        messages.error(request, error_message)
+        return redirect('reports')
+
+    success_message = summarize_reference_data_import(dataset_key, result)
+    if ajax_request:
+        return JsonResponse({
+            'ok': True,
+            'message': success_message,
+            'last_uploaded_display': format_upload_timestamp(upload_status.last_uploaded_at),
+            'last_uploaded_filename': upload_status.last_uploaded_filename,
+        })
+
+    messages.success(request, success_message)
+    return redirect('reports')
 
 
 @never_cache

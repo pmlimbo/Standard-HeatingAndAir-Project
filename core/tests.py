@@ -2,10 +2,11 @@ import csv
 import io
 
 from django.contrib.auth.models import Group, User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Employee, Job, TimeEntry, WorkCode
+from .models import Employee, Job, ReferenceDataUpload, TimeEntry, WorkCode
 
 
 class TimesheetViewTests(TestCase):
@@ -17,7 +18,7 @@ class TimesheetViewTests(TestCase):
             last_name='Worker',
         )
         self.client.login(username='worker1', password='testpass123')
-        self.job = Job.objects.create(job_number='JOB-100', job_name='Test Job', street_address='123 Main')
+        self.job = Job.objects.create(job_number='JOB-100', job_name='Test Job', street_address='123 Main', status_code='A')
         self.job_code = WorkCode.objects.create(code='100', description='Install', requires_job=True, is_active=True)
         self.non_job_code = WorkCode.objects.create(code='SM', description='Safety Meeting', requires_job=False, is_active=True)
 
@@ -182,6 +183,7 @@ class TimesheetViewTests(TestCase):
         self.assertContains(response, 'JOB-100')
         self.assertContains(response, 'Test Job')
         self.assertContains(response, '123 Main')
+        self.assertContains(response, 'Active')
         self.assertContains(response, '100 - Install')
         self.assertContains(response, 'SM - Safety Meeting')
 
@@ -244,7 +246,12 @@ class TimesheetViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['results'], [
-            {'label': 'JOB-100 | Test Job | 123 Main'},
+            {
+                'label': 'JOB-100 | Test Job | 123 Main',
+                'status_code': 'A',
+                'status_label': 'Active',
+                'status_tone': 'success',
+            },
         ])
 
     def test_work_code_lookups_return_filtered_matches(self):
@@ -258,6 +265,21 @@ class TimesheetViewTests(TestCase):
         self.assertEqual(non_job_code_response.status_code, 200)
         self.assertEqual(non_job_code_response.json()['results'], [
             {'label': 'SM - Safety Meeting'},
+        ])
+
+    def test_job_lookup_hides_ignore_status_badge(self):
+        Job.objects.create(
+            job_number='JOB-Z',
+            job_name='Ignored Status Job',
+            street_address='999 Hidden',
+            status_code='Z',
+        )
+
+        response = self.client.get(reverse('search_jobs'), {'q': 'JOB-Z'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['results'], [
+            {'label': 'JOB-Z | Ignored Status Job | 999 Hidden'},
         ])
 
     def test_delete_requires_post(self):
@@ -351,6 +373,7 @@ class ReportsAccessTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Single Day Export')
+        self.assertContains(response, 'Timesheet Info')
         self.assertNotContains(response, reverse('add_customer'))
         self.assertContains(response, 'Go to Main Website')
         self.assertContains(response, 'Admin Login')
@@ -378,6 +401,22 @@ class ReportsAccessTests(TestCase):
         self.assertContains(response, reverse('admin:index'))
         self.assertNotContains(response, 'Admin Login')
 
+    def test_reports_shows_reference_data_download_links(self):
+        self.user.groups.add(self.authorized_group)
+        self.client.login(username='worker2', password='testpass123')
+
+        response = self.client.get(reverse('reports'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Download Current Jobs')
+        self.assertContains(response, 'Download Current Employees')
+        self.assertContains(response, 'Download Current Work Codes')
+        self.assertContains(response, 'Download Current Non Job Codes')
+        self.assertContains(response, reverse('download_reference_data', args=['jobs']))
+        self.assertContains(response, reverse('download_reference_data', args=['employees']))
+        self.assertContains(response, reverse('download_reference_data', args=['work_codes']))
+        self.assertContains(response, reverse('download_reference_data', args=['non_job_codes']))
+
     def test_employee_lookup_requires_authorized_user(self):
         self.client.login(username='worker2', password='testpass123')
 
@@ -395,6 +434,24 @@ class ReportsAccessTests(TestCase):
         self.assertEqual(response.json()['results'], [
             {'label': 'Alicia Example (employee99)', 'value': str(self.report_employee.id)},
         ])
+
+
+class JobStatusMappingTests(TestCase):
+    def test_additional_job_status_mappings(self):
+        expected = {
+            'A': ('Active', 'success'),
+            'C': ('Complete', 'success'),
+            'F': ('Finished', 'success'),
+            'H': ('Hold', 'warning'),
+            'I': ('Inactive', 'danger'),
+            'P': ('Proposed', 'warning'),
+            'Z': ('', 'warning'),
+        }
+
+        for code, (label, tone) in expected.items():
+            job = Job(job_number=f'JOB-{code}', status_code=code)
+            self.assertEqual(job.status_label, label)
+            self.assertEqual(job.status_tone, tone)
 
 
 class ReportsExportTests(TestCase):
@@ -487,3 +544,133 @@ class ReportsExportTests(TestCase):
         self.assertEqual(len(rows), 3)
         self.assertEqual({row[1] for row in rows[1:]}, {'manager1'})
         self.assertEqual({row[3] for row in rows[1:]}, {'16-Apr-26', '17-Apr-26'})
+
+
+class ReferenceDataManagementTests(TestCase):
+    def setUp(self):
+        self.authorized_group = Group.objects.create(name='Authorized')
+        self.manager = User.objects.create_user(
+            username='manager2',
+            password='testpass123',
+            first_name='Jamie',
+            last_name='Manager',
+        )
+        self.manager.groups.add(self.authorized_group)
+        self.client.login(username='manager2', password='testpass123')
+
+    def test_upload_non_job_codes_imports_dropdown_values_and_records_timestamp(self):
+        upload = SimpleUploadedFile(
+            'non-job-codes.csv',
+            b'Code,TASK\nET,Employee Training\nSM,Safety Meeting\n',
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            reverse('upload_reference_data', args=['non_job_codes']),
+            {'csv_file': upload},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(WorkCode.objects.filter(code='ET', requires_job=False, is_active=True).exists())
+        self.assertTrue(WorkCode.objects.filter(code='SM', requires_job=False, is_active=True).exists())
+
+        status = ReferenceDataUpload.objects.get(dataset='non_job_codes')
+        self.assertEqual(status.last_uploaded_filename, 'non-job-codes.csv')
+        self.assertIsNotNone(status.last_uploaded_at)
+
+        lookup_response = self.client.get(reverse('search_non_job_codes'), {'q': 'ET'})
+        self.assertEqual(lookup_response.status_code, 200)
+        self.assertEqual(lookup_response.json()['results'], [
+            {'label': 'ET - Employee Training'},
+        ])
+
+    def test_download_current_work_codes_exports_active_rows(self):
+        WorkCode.objects.create(code='100', description='Install', requires_job=True, is_active=True)
+        WorkCode.objects.create(code='200', description='Inactive', requires_job=True, is_active=False)
+
+        response = self.client.get(reverse('download_reference_data', args=['work_codes']))
+
+        self.assertEqual(response.status_code, 200)
+        rows = list(csv.reader(io.StringIO(response.content.decode())))
+        self.assertEqual(rows, [
+            ['Code', 'TASK'],
+            ['100', 'Install'],
+        ])
+
+    def test_upload_jobs_saves_status_code(self):
+        upload = SimpleUploadedFile(
+            'jobs.csv',
+            b'JobNumber,Job_Address,Job_Name,Status_Code\nJOB-500,500 Main,Main Job,A\n',
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            reverse('upload_reference_data', args=['jobs']),
+            {'csv_file': upload},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        job = Job.objects.get(job_number='JOB-500')
+        self.assertEqual(job.status_code, 'A')
+
+    def test_download_current_employees_leaves_password_column_blank(self):
+        employee_user = User.objects.create_user(
+            username='emp01',
+            password='secret123',
+            first_name='Pat',
+            last_name='Jones',
+        )
+        Employee.objects.create(user=employee_user)
+
+        response = self.client.get(reverse('download_reference_data', args=['employees']))
+
+        self.assertEqual(response.status_code, 200)
+        rows = list(csv.reader(io.StringIO(response.content.decode())))
+        self.assertEqual(rows, [
+            ['EmpCD', 'Employee_Name', 'Password'],
+            ['emp01', 'Pat Jones', ''],
+        ])
+
+    def test_upload_employees_with_blank_password_keeps_existing_password(self):
+        employee_user = User.objects.create_user(
+            username='emp02',
+            password='keepme123',
+            first_name='Old',
+            last_name='Name',
+        )
+        Employee.objects.create(user=employee_user)
+
+        upload = SimpleUploadedFile(
+            'employees.csv',
+            b'EmpCD,Employee_Name,Password\nemp02,Jamie Updated,\n',
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            reverse('upload_reference_data', args=['employees']),
+            {'csv_file': upload},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        employee_user.refresh_from_db()
+        self.assertTrue(employee_user.check_password('keepme123'))
+        self.assertEqual(employee_user.first_name, 'Jamie')
+        self.assertEqual(employee_user.last_name, 'Updated')
+
+    def test_ajax_upload_returns_json_payload_for_progress_ui(self):
+        upload = SimpleUploadedFile(
+            'work-codes.csv',
+            b'Code,TASK\n100,Install\n',
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            reverse('upload_reference_data', args=['work_codes']),
+            {'csv_file': upload},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['ok'], True)
+        self.assertEqual(response.json()['last_uploaded_filename'], 'work-codes.csv')
+        self.assertIn('Work Codes upload complete', response.json()['message'])

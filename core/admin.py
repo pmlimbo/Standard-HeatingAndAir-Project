@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Customer, Employee, Job, TimeEntry, WorkCode
+from .models import Customer, Employee, Job, ReferenceDataUpload, TimeEntry, WorkCode
 
 
 @admin.register(Customer)
@@ -19,14 +19,20 @@ class WorkCodeAdmin(admin.ModelAdmin):
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
-    list_display = ('job_number', 'job_name', 'street_address', 'city', 'state', 'zip_code')
-    search_fields = ('job_number', 'job_name', 'street_address', 'city', 'state', 'zip_code')
+    list_display = ('job_number', 'job_name', 'status_code', 'street_address', 'city', 'state', 'zip_code')
+    search_fields = ('job_number', 'job_name', 'status_code', 'street_address', 'city', 'state', 'zip_code')
 
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = ('id', 'user')
     search_fields = ('user__username', 'user__first_name', 'user__last_name')
+
+
+@admin.register(ReferenceDataUpload)
+class ReferenceDataUploadAdmin(admin.ModelAdmin):
+    list_display = ('dataset', 'last_uploaded_at', 'last_uploaded_filename')
+    search_fields = ('dataset', 'last_uploaded_filename')
 
 
 @admin.register(TimeEntry)

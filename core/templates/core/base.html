@@ -167,6 +167,13 @@
             background: var(--surface-alt);
         }
 
+        .dropdown-item-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
         .dropdown-item.is-static {
             cursor: default;
             color: var(--muted);
@@ -222,6 +229,155 @@
         .muted {
             color: var(--muted);
         }
+
+        .flash-messages {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .flash-message {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-left-width: 4px;
+            border-radius: 8px;
+            background: var(--surface);
+        }
+
+        .flash-message.success {
+            border-left-color: #2f855a;
+            background: #f0fff4;
+        }
+
+        .flash-message.error {
+            border-left-color: var(--danger);
+            background: #fff5f5;
+        }
+
+        .flash-message.warning {
+            border-left-color: #b7791f;
+            background: #fffaf0;
+        }
+
+        .flash-message.info {
+            border-left-color: var(--accent);
+            background: #eff6ff;
+        }
+
+        .reference-data-list {
+            display: grid;
+            gap: 16px;
+        }
+
+        .reference-data-row {
+            display: grid;
+            gap: 12px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .reference-data-row:first-child {
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .reference-data-form {
+            display: grid;
+            gap: 10px;
+        }
+
+        .reference-data-actions {
+            display: grid;
+            gap: 10px;
+        }
+
+        .upload-progress {
+            display: none;
+            gap: 6px;
+        }
+
+        .upload-progress.is-active {
+            display: grid;
+        }
+
+        .upload-progress-label,
+        .upload-status {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .upload-progress-track {
+            width: 100%;
+            height: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface-alt);
+        }
+
+        .upload-progress-bar {
+            width: 0;
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.2s ease;
+        }
+
+        .upload-status.success {
+            color: #2f855a;
+        }
+
+        .upload-status.error {
+            color: var(--danger);
+        }
+
+        .job-status-display {
+            display: none;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .job-status-display.is-visible {
+            display: flex;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            border: 1px solid transparent;
+        }
+
+        .status-pill.success {
+            color: #166534;
+            background: #dcfce7;
+            border-color: #86efac;
+        }
+
+        .status-pill.danger {
+            color: #991b1b;
+            background: #fee2e2;
+            border-color: #fca5a5;
+        }
+
+        .status-pill.warning {
+            color: #92400e;
+            background: #fef3c7;
+            border-color: #fcd34d;
+        }
+
+        @media (min-width: 760px) {
+            .reference-data-row {
+                grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.2fr);
+                align-items: end;
+            }
+        }
     </style>
 </head>
 <body>
@@ -245,6 +401,14 @@
             {% csrf_token %}
             <button type="submit">Logout</button>
         </form>
+    </div>
+    {% endif %}
+
+    {% if messages %}
+    <div class="flash-messages">
+        {% for message in messages %}
+        <div class="flash-message {{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
     </div>
     {% endif %}
 

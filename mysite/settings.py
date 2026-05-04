@@ -10,10 +10,22 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+
+def env(name, default=None):
+    value = os.getenv(name, default)
+    if value is None:
+        raise ImproperlyConfigured(f"Missing required environment variable: {name}")
+    return value
 
 
 # Quick-start development settings - unsuitable for production
@@ -84,9 +96,18 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("DB_NAME"),
+        "USER": env("DB_USER"),
+        "PASSWORD": env("DB_PASSWORD"),
+        "HOST": env("DB_HOST"),
+        "PORT": env("DB_PORT", "5432"),
+        "CONN_HEALTH_CHECKS": True,
+        "CONN_MAX_AGE": 0,
+        "OPTIONS": {
+            "sslmode": os.getenv("DB_SSLMODE", "disable"),
+        },
     }
 }
 

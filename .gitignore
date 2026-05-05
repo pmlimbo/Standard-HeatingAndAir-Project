@@ -11,6 +11,9 @@ db.sqlite3
 # Environment variables
 .env
 
+# Collected static files
+staticfiles/
+
 # IDE
 .idea/
 

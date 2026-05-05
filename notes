@@ -1,7 +1,12 @@
 #python manage.py graph_models core -o erd.png  to get the ERD
 
-#Password for testing is
+TO RUN THE WEBSITE ====================================================
+cd /d C:\Users\piercel\PycharmProjects\DjangoProject\mysite
 
+C:\Users\piercel\PycharmProjects\DjangoProject\.venv\Scripts\Activate.bat
+
+python serve_waitress.py
+============================================================================
 
 #MAKE IT SO YOU CANT VIEW SOURCE STUFF
 
